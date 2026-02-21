@@ -1,0 +1,208 @@
+import { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from "react-native";
+import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import Colors from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import * as Haptics from "expo-haptics";
+
+export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const webTopInset = Platform.OS === "web" ? 67 : 0;
+
+  async function handleLogin() {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+    setLoading(true);
+    try {
+      await login(email.trim(), password);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(main)/wardrobe");
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <View style={styles.container}>
+      <LinearGradient
+        colors={["#000000", "#0A0A0A", "#111111"]}
+        style={StyleSheet.absoluteFill}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
+        keyboardVerticalOffset={90}
+      >
+        <View style={[styles.content, { paddingTop: insets.top + webTopInset + 60 }]}>
+          <Animated.View entering={FadeIn.duration(800)} style={styles.brandSection}>
+            <Text style={styles.brandLabel}>AI Personal Stylist</Text>
+            <Text style={styles.brandTitle}>The Stylist</Text>
+            <View style={styles.brandLine} />
+            <Text style={styles.brandQuote}>
+              "Style is the art of being yourself."
+            </Text>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.formSection}>
+            <View style={styles.inputContainer}>
+              <Ionicons name="mail-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={Colors.textMuted}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor={Colors.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={handleLogin}
+              disabled={loading}
+              style={({ pressed }) => [
+                styles.loginButton,
+                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                loading && { opacity: 0.6 },
+              ]}
+            >
+              <Text style={styles.loginButtonText}>
+                {loading ? "Signing in..." : "Sign In"}
+              </Text>
+            </Pressable>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(500).duration(600)} style={[styles.footer, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 20) }]}>
+            <Text style={styles.footerText}>Don't have an account?</Text>
+            <Pressable onPress={() => router.push("/(auth)/register")}>
+              <Text style={styles.footerLink}>Create Account</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  keyboardView: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 28 },
+  brandSection: { marginBottom: 48 },
+  brandLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    color: Colors.accent,
+    letterSpacing: 3,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  brandTitle: {
+    fontFamily: "PlayfairDisplay_700Bold",
+    fontSize: 42,
+    color: Colors.white,
+    marginBottom: 16,
+  },
+  brandLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: Colors.accent,
+    marginBottom: 16,
+  },
+  brandQuote: {
+    fontFamily: "PlayfairDisplay_400Regular",
+    fontSize: 16,
+    color: Colors.textSecondary,
+    fontStyle: "italic",
+  },
+  formSection: { gap: 16 },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.inputBg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputIcon: { marginRight: 12 },
+  input: {
+    flex: 1,
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    color: Colors.white,
+    height: "100%",
+  },
+  eyeBtn: { padding: 4 },
+  loginButton: {
+    backgroundColor: Colors.accent,
+    borderRadius: 12,
+    height: 56,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  loginButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: Colors.black,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    marginTop: "auto",
+  },
+  footerText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  footerLink: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: Colors.accent,
+  },
+});
