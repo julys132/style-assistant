@@ -5,6 +5,7 @@ interface User {
   id: string;
   email: string;
   name: string;
+  provider?: "email" | "apple" | "google";
 }
 
 interface AuthContextValue {
@@ -12,7 +13,9 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  socialLogin: (user: { id: string; email: string; name: string; provider: "apple" | "google" }) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const users = JSON.parse((await AsyncStorage.getItem("@stylist_users")) || "[]");
     const found = users.find((u: any) => u.email === email && u.password === password);
     if (!found) throw new Error("Invalid email or password");
-    const userData: User = { id: found.id, email: found.email, name: found.name };
+    const userData: User = { id: found.id, email: found.email, name: found.name, provider: "email" };
     await AsyncStorage.setItem("@stylist_user", JSON.stringify(userData));
     setUser(userData);
   }
@@ -55,8 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const newUser = { id: Date.now().toString(), email, name, password };
     users.push(newUser);
     await AsyncStorage.setItem("@stylist_users", JSON.stringify(users));
-    const userData: User = { id: newUser.id, email, name };
+    const userData: User = { id: newUser.id, email, name, provider: "email" };
     await AsyncStorage.setItem("@stylist_user", JSON.stringify(userData));
+    setUser(userData);
+  }
+
+  async function socialLogin(socialUser: { id: string; email: string; name: string; provider: "apple" | "google" }) {
+    const userData: User = {
+      id: socialUser.id,
+      email: socialUser.email,
+      name: socialUser.name,
+      provider: socialUser.provider,
+    };
+    await AsyncStorage.setItem("@stylist_user", JSON.stringify(userData));
+    const users = JSON.parse((await AsyncStorage.getItem("@stylist_users")) || "[]");
+    const exists = users.find((u: any) => u.email === socialUser.email);
+    if (!exists) {
+      users.push({ ...socialUser });
+      await AsyncStorage.setItem("@stylist_users", JSON.stringify(users));
+    }
     setUser(userData);
   }
 
@@ -65,8 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function deleteAccount() {
+    if (!user) return;
+    const users = JSON.parse((await AsyncStorage.getItem("@stylist_users")) || "[]");
+    const filtered = users.filter((u: any) => u.id !== user.id);
+    await AsyncStorage.setItem("@stylist_users", JSON.stringify(filtered));
+    await AsyncStorage.removeItem("@stylist_user");
+    await AsyncStorage.removeItem(`@stylist_credits_${user.id}`);
+    await AsyncStorage.removeItem(`@stylist_sub_${user.id}`);
+    await AsyncStorage.removeItem("@stylist_wardrobe");
+    await AsyncStorage.removeItem("@stylist_outfits");
+    setUser(null);
+  }
+
   const value = useMemo(
-    () => ({ user, isLoading, login, register, logout }),
+    () => ({ user, isLoading, login, register, socialLogin, logout, deleteAccount }),
     [user, isLoading]
   );
 
