@@ -3,6 +3,8 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useWardrobe, OutfitResult } from "@/contexts/WardrobeContext";
@@ -20,7 +22,7 @@ function EmptyOutfits() {
   );
 }
 
-function OutfitCard({ outfit, onDelete }: { outfit: OutfitResult; onDelete: () => void }) {
+function OutfitCard({ outfit, onDelete, onDownload }: { outfit: OutfitResult; onDelete: () => void; onDownload: () => void }) {
   const date = new Date(outfit.createdAt);
   const formattedDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -65,17 +67,26 @@ function OutfitCard({ outfit, onDelete }: { outfit: OutfitResult; onDelete: () =
             </Text>
           </View>
         )}
-      </View>
 
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onDelete();
-        }}
-        style={styles.deleteBtn}
-      >
-        <Ionicons name="trash-outline" size={16} color={Colors.textMuted} />
-      </Pressable>
+        <View style={styles.cardActions}>
+          {outfit.imageBase64 && (
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); onDownload(); }}
+              style={({ pressed }) => [styles.cardActionBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="download-outline" size={16} color={Colors.accent} />
+              <Text style={styles.cardActionText}>Download</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onDelete(); }}
+            style={({ pressed }) => [styles.cardActionBtn, styles.cardDeleteBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FF4444" />
+            <Text style={[styles.cardActionText, { color: "#FF4444" }]}>Delete</Text>
+          </Pressable>
+        </View>
+      </View>
     </Animated.View>
   );
 }
@@ -93,6 +104,33 @@ export default function OutfitsScreen() {
     ]);
   }, [removeOutfit]);
 
+  const handleDownload = useCallback(async (outfit: OutfitResult) => {
+    if (!outfit.imageBase64) return;
+    try {
+      if (Platform.OS === "web") {
+        const link = document.createElement("a");
+        link.href = `data:image/png;base64,${outfit.imageBase64}`;
+        link.download = `outfit_${outfit.id}.png`;
+        link.click();
+        Alert.alert("Success", "Image downloaded!");
+      } else {
+        const fileUri = FileSystem.documentDirectory + `outfit_${outfit.id}.png`;
+        await FileSystem.writeAsStringAsync(fileUri, outfit.imageBase64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri);
+        } else {
+          Alert.alert("Saved", "Outfit image saved.");
+        }
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert("Error", "Failed to download image.");
+    }
+  }, []);
+
   return (
     <View style={styles.container}>
       <Animated.View entering={FadeIn.duration(600)} style={[styles.header, { paddingTop: insets.top + webTopInset + 12 }]}>
@@ -104,7 +142,11 @@ export default function OutfitsScreen() {
         data={outfits}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <OutfitCard outfit={item} onDelete={() => handleDelete(item.id)} />
+          <OutfitCard
+            outfit={item}
+            onDelete={() => handleDelete(item.id)}
+            onDownload={() => handleDownload(item)}
+          />
         )}
         contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
         ListEmptyComponent={<EmptyOutfits />}
@@ -221,15 +263,30 @@ const styles = StyleSheet.create({
     flex: 1,
     fontStyle: "italic",
   },
-  deleteBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
+  cardActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.cardBorder,
+  },
+  cardActionBtn: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "rgba(201, 169, 110, 0.1)",
+  },
+  cardDeleteBtn: {
+    backgroundColor: "rgba(255, 68, 68, 0.1)",
+    marginLeft: "auto",
+  },
+  cardActionText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: Colors.accent,
   },
 });

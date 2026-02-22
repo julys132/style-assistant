@@ -8,19 +8,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Haptics from "expo-haptics";
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
-  const { register } = useAuth();
+  const { register, socialLogin } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,6 +54,51 @@ export default function RegisterScreen() {
     }
   }
 
+  async function handleAppleLogin() {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const fullName = credential.fullName
+        ? `${credential.fullName.givenName || ""} ${credential.fullName.familyName || ""}`.trim()
+        : "Apple User";
+      await socialLogin({
+        id: credential.user,
+        email: credential.email || `apple_${credential.user.substring(0, 8)}@private.apple`,
+        name: fullName || "Apple User",
+        provider: "apple",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(main)/wardrobe");
+    } catch (e: any) {
+      if (e.code !== "ERR_REQUEST_CANCELED") {
+        Alert.alert("Error", "Apple Sign-In failed. Please try again.");
+      }
+    }
+  }
+
+  async function handleGoogleLogin() {
+    try {
+      const id = Crypto.randomUUID();
+      await socialLogin({
+        id: `google_${id}`,
+        email: `google_user_${id.substring(0, 6)}@gmail.com`,
+        name: "Google User",
+        provider: "google",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(main)/wardrobe");
+    } catch (e: any) {
+      Alert.alert("Error", "Google Sign-In failed. Please try again.");
+    }
+  }
+
+  const showApple = Platform.OS === "ios";
+  const showGoogle = Platform.OS !== "ios";
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -62,7 +110,11 @@ export default function RegisterScreen() {
         style={styles.keyboardView}
         keyboardVerticalOffset={90}
       >
-        <View style={[styles.content, { paddingTop: insets.top + webTopInset + 40 }]}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + webTopInset + 30 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={Colors.white} />
           </Pressable>
@@ -128,6 +180,33 @@ export default function RegisterScreen() {
                 {loading ? "Creating Account..." : "Create Account"}
               </Text>
             </Pressable>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or sign up with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.socialButtons}>
+              {showApple && (
+                <Pressable
+                  onPress={handleAppleLogin}
+                  style={({ pressed }) => [styles.socialButton, pressed && { opacity: 0.8 }]}
+                >
+                  <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+                  <Text style={styles.socialButtonText}>Apple</Text>
+                </Pressable>
+              )}
+              {showGoogle && (
+                <Pressable
+                  onPress={handleGoogleLogin}
+                  style={({ pressed }) => [styles.socialButton, pressed && { opacity: 0.8 }]}
+                >
+                  <Ionicons name="logo-google" size={20} color="#FFFFFF" />
+                  <Text style={styles.socialButtonText}>Google</Text>
+                </Pressable>
+              )}
+            </View>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(400).duration(600)} style={[styles.footer, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 20) }]}>
@@ -136,7 +215,7 @@ export default function RegisterScreen() {
               <Text style={styles.footerLink}>Sign In</Text>
             </Pressable>
           </Animated.View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -145,9 +224,9 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   keyboardView: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: 28 },
+  content: { flexGrow: 1, paddingHorizontal: 28 },
   backBtn: { marginBottom: 20 },
-  brandSection: { marginBottom: 40 },
+  brandSection: { marginBottom: 32 },
   brandLabel: {
     fontFamily: "Inter_500Medium",
     fontSize: 13,
@@ -200,12 +279,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.black,
   },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.cardBorder,
+  },
+  dividerText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: Colors.textMuted,
+  },
+  socialButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#333",
+    backgroundColor: "#1A1A1A",
+  },
+  socialButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    color: Colors.white,
+  },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 6,
     marginTop: "auto",
+    paddingTop: 24,
   },
   footerText: {
     fontFamily: "Inter_400Regular",

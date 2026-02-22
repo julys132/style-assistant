@@ -96,6 +96,12 @@ function ClassicTabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="credits"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
