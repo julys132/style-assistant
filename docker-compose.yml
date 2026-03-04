@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: style_assistant_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: style_assistant
+      POSTGRES_USER: stylist
+      POSTGRES_PASSWORD: stylist
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+volumes:
+  postgres_data:

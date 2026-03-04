@@ -83,8 +83,11 @@ export default function WardrobeScreen() {
       quality: 0.7,
       base64: true,
     });
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+    const selectedAsset = !result.canceled && result.assets[0] ? result.assets[0] : null;
+    if (selectedAsset?.uri) {
+      setImageUri(selectedAsset.uri);
+    } else if (!result.canceled) {
+      Alert.alert("Image error", "Could not read the selected image. Please try again.");
     }
   }, []);
 
@@ -107,7 +110,7 @@ export default function WardrobeScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       resetForm();
       setShowModal(false);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Failed to save item");
     } finally {
       setSaving(false);
@@ -122,12 +125,34 @@ export default function WardrobeScreen() {
     setDescription("");
   };
 
+  const performDelete = useCallback(async (id: string) => {
+    try {
+      await removeItem(id);
+    } catch (error) {
+      console.error("Remove item failed:", error);
+      Alert.alert("Error", "Could not remove this item. Please try again.");
+    }
+  }, [removeItem]);
+
   const handleDelete = useCallback((id: string) => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const confirmed = window.confirm("Are you sure you want to remove this item?");
+      if (!confirmed) return;
+      void performDelete(id);
+      return;
+    }
+
     Alert.alert("Remove Item", "Are you sure you want to remove this item?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => removeItem(id) },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          void performDelete(id);
+        },
+      },
     ]);
-  }, [removeItem]);
+  }, [performDelete]);
 
   return (
     <View style={styles.container}>

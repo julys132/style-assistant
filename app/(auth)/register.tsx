@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -16,10 +16,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as AppleAuthentication from "expo-apple-authentication";
-import * as Crypto from "expo-crypto";
+import * as Google from "expo-auth-session/providers/google";
+import { makeRedirectUri } from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import * as Haptics from "expo-haptics";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
@@ -28,26 +32,97 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [googleNativeModule, setGoogleNativeModule] =
+    useState<typeof import("@react-native-google-signin/google-signin") | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => setAppleAuthAvailable(available))
+      .catch(() => setAppleAuthAvailable(false));
+  }, []);
+
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const nativeGoogleWebClientId = googleWebClientId || "";
+  const googleIosClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleWebClientId;
+  const googleAndroidClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || googleWebClientId;
+  const googleAuthSessionConfigured = Boolean(
+    googleWebClientId || googleIosClientId || googleAndroidClientId,
+  );
+  const googleNativeConfigured = nativeGoogleWebClientId.length > 0;
+  const googleIsConfigured =
+    Platform.OS === "android" ? googleNativeConfigured : googleAuthSessionConfigured;
+
+  const googleAuthConfig: any = {
+    ...(googleWebClientId
+      ? {
+          clientId: googleWebClientId,
+          webClientId: googleWebClientId,
+        }
+      : {}),
+    ...(googleIosClientId ? { iosClientId: googleIosClientId } : {}),
+    ...(googleAndroidClientId ? { androidClientId: googleAndroidClientId } : {}),
+    redirectUri:
+      Platform.OS === "web" && typeof window !== "undefined"
+        ? `${window.location.origin}/`
+        : makeRedirectUri({ scheme: "muse" }),
+    selectAccount: true,
+  };
+  const [googleRequest, , promptGoogleAuth] = Google.useIdTokenAuthRequest(googleAuthConfig);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  useEffect(() => {
+    if (Platform.OS !== "android" || !googleNativeConfigured) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const googleSigninModule = await import("@react-native-google-signin/google-signin");
+        if (cancelled) return;
+
+        googleSigninModule.GoogleSignin.configure({
+          webClientId: nativeGoogleWebClientId,
+          offlineAccess: false,
+          forceCodeForRefreshToken: false,
+        });
+
+        setGoogleNativeModule(googleSigninModule);
+      } catch (error) {
+        console.warn("Native Google Sign-In module unavailable on this build", error);
+        setGoogleNativeModule(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [googleNativeConfigured, nativeGoogleWebClientId]);
+
   async function handleRegister() {
+    setErrorMessage(null);
     if (!name.trim() || !email.trim() || !password.trim()) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+    if (password.length < 8) {
+      Alert.alert("Error", "Password must be at least 8 characters");
       return;
     }
     setLoading(true);
     try {
       await register(name.trim(), email.trim(), password);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(main)/wardrobe");
+      router.replace("/(tabs)/wardrobe");
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      const message = e?.message || "Registration failed. Please try again.";
+      setErrorMessage(message);
+      Alert.alert("Error", message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
@@ -65,14 +140,17 @@ export default function RegisterScreen() {
       const fullName = credential.fullName
         ? `${credential.fullName.givenName || ""} ${credential.fullName.familyName || ""}`.trim()
         : "Apple User";
+      if (!credential.identityToken) {
+        throw new Error("Apple identity token not returned");
+      }
       await socialLogin({
-        id: credential.user,
-        email: credential.email || `apple_${credential.user.substring(0, 8)}@private.apple`,
-        name: fullName || "Apple User",
         provider: "apple",
+        identityToken: credential.identityToken,
+        email: credential.email || undefined,
+        name: fullName || "Apple User",
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(main)/wardrobe");
+      router.replace("/(tabs)/wardrobe");
     } catch (e: any) {
       if (e.code !== "ERR_REQUEST_CANCELED") {
         Alert.alert("Error", "Apple Sign-In failed. Please try again.");
@@ -82,22 +160,93 @@ export default function RegisterScreen() {
 
   async function handleGoogleLogin() {
     try {
-      const id = Crypto.randomUUID();
+      if (Platform.OS === "android") {
+        if (!googleNativeConfigured) {
+          throw new Error(
+            "Google Sign-In is not configured. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID for Android native sign-in.",
+          );
+        }
+        if (!googleNativeModule) {
+          Alert.alert(
+            "Google Sign-In unavailable",
+            "This build does not include native Google Sign-In. Use email login or run an Android development build.",
+          );
+          return;
+        }
+
+        const { GoogleSignin } = googleNativeModule;
+
+        await GoogleSignin.hasPlayServices({
+          showPlayServicesUpdateDialog: true,
+        });
+
+        await GoogleSignin.signIn();
+        const tokens = await GoogleSignin.getTokens();
+        if (!tokens.idToken) {
+          throw new Error("Google did not return an ID token");
+        }
+
+        await socialLogin({
+          provider: "google",
+          idToken: tokens.idToken,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/(tabs)/wardrobe");
+        return;
+      }
+
+      if (!googleAuthSessionConfigured) {
+        throw new Error(
+          "Google Sign-In is not configured. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID and EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID.",
+        );
+      }
+      if (!googleRequest) {
+        throw new Error("Google Sign-In is not ready yet");
+      }
+
+      const result: any = await promptGoogleAuth();
+      if (result?.type !== "success") {
+        return;
+      }
+
+      const idToken = result?.params?.id_token || result?.authentication?.idToken;
+      if (!idToken) {
+        throw new Error("Google did not return an ID token");
+      }
+
       await socialLogin({
-        id: `google_${id}`,
-        email: `google_user_${id.substring(0, 6)}@gmail.com`,
-        name: "Google User",
         provider: "google",
+        idToken,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(main)/wardrobe");
+      router.replace("/(tabs)/wardrobe");
     } catch (e: any) {
+      if (Platform.OS === "android") {
+        const code = e?.code;
+        const statusCodes = googleNativeModule?.statusCodes;
+        if (
+          code === statusCodes?.SIGN_IN_CANCELLED ||
+          code === statusCodes?.IN_PROGRESS ||
+          code === "SIGN_IN_CANCELLED" ||
+          code === "IN_PROGRESS"
+        ) {
+          return;
+        }
+        if (
+          code === statusCodes?.PLAY_SERVICES_NOT_AVAILABLE ||
+          code === "PLAY_SERVICES_NOT_AVAILABLE"
+        ) {
+          Alert.alert("Error", "Google Play Services are not available on this device.");
+          return;
+        }
+      }
       Alert.alert("Error", "Google Sign-In failed. Please try again.");
     }
   }
 
-  const showApple = Platform.OS === "ios";
-  const showGoogle = Platform.OS !== "ios";
+  const showApple = Platform.OS === "ios" && appleAuthAvailable;
+  const showGoogle =
+    Platform.OS === "android" ? googleIsConfigured && !!googleNativeModule : googleIsConfigured;
 
   return (
     <View style={styles.container}>
@@ -133,7 +282,10 @@ export default function RegisterScreen() {
                 placeholder="Full Name"
                 placeholderTextColor={Colors.textMuted}
                 value={name}
-                onChangeText={setName}
+                onChangeText={(value) => {
+                  setName(value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 autoCapitalize="words"
               />
             </View>
@@ -145,7 +297,10 @@ export default function RegisterScreen() {
                 placeholder="Email"
                 placeholderTextColor={Colors.textMuted}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(value) => {
+                  setEmail(value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -156,10 +311,13 @@ export default function RegisterScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Password (min 6 characters)"
+                placeholder="Password (min 8 characters)"
                 placeholderTextColor={Colors.textMuted}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(value) => {
+                  setPassword(value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 secureTextEntry={!showPassword}
               />
               <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
@@ -180,6 +338,10 @@ export default function RegisterScreen() {
                 {loading ? "Creating Account..." : "Create Account"}
               </Text>
             </Pressable>
+
+            {errorMessage ? (
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            ) : null}
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -279,6 +441,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.black,
   },
+  errorText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: "#FF9A9A",
+    lineHeight: 18,
+  },
   divider: {
     flexDirection: "row",
     alignItems: "center",
@@ -335,3 +503,4 @@ const styles = StyleSheet.create({
     color: Colors.accent,
   },
 });
+

@@ -12,9 +12,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
+import { resolveIapProductId, useIAP } from "@/hooks/useIAP";
 import {
   useCredits,
   CREDIT_PACKAGES,
@@ -22,6 +25,8 @@ import {
   CreditPackage,
   SubscriptionPlan,
 } from "@/contexts/CreditsContext";
+
+WebBrowser.maybeCompleteAuthSession();
 
 function PackageCard({
   pkg,
@@ -121,17 +126,124 @@ function SubPlanCard({
 
 export default function CreditsScreen() {
   const insets = useSafeAreaInsets();
-  const { credits, subscription, purchasePackage, subscribeToPlan } = useCredits();
+  const {
+    credits,
+    subscription,
+    purchasePackage,
+    subscribeToPlan,
+    verifyPaymentSession,
+    grantDevCredits,
+    refreshCredits,
+  } = useCredits();
+  const iap = useIAP();
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const [subLoading, setSubLoading] = useState<string | null>(null);
+  const [devGrantLoading, setDevGrantLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"credits" | "subscription">("credits");
+  const showDevCreditTools = __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEV_CREDITS === "true";
+  const nativePlatform = Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : null;
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+
+  function getCheckoutUrls() {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const origin = window.location.origin;
+      return {
+        successUrl: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${origin}/credits`,
+        redirectUrl: `${origin}/payment-success`,
+      };
+    }
+
+    const redirectUrl = Linking.createURL("payment-success");
+    const separator = redirectUrl.includes("?") ? "&" : "?";
+    return {
+      successUrl: `${redirectUrl}${separator}session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${redirectUrl}${separator}cancelled=1`,
+      redirectUrl,
+    };
+  }
+
+  async function runCheckout(
+    url: string,
+    redirectUrl: string,
+  ): Promise<{ sessionId: string | null; cancelled: boolean }> {
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") {
+        window.location.assign(url);
+      }
+      return { sessionId: null, cancelled: false };
+    }
+
+    const result = await WebBrowser.openAuthSessionAsync(url, redirectUrl);
+    if (result.type !== "success" || !result.url) {
+      return {
+        sessionId: null,
+        cancelled: result.type === "cancel" || result.type === "dismiss",
+      };
+    }
+
+    const parsed = Linking.parse(result.url);
+    const rawSessionId = parsed.queryParams?.session_id;
+    const rawCancelled = parsed.queryParams?.cancelled;
+    const sessionId =
+      typeof rawSessionId === "string"
+        ? rawSessionId
+        : Array.isArray(rawSessionId) && typeof rawSessionId[0] === "string"
+          ? rawSessionId[0]
+          : null;
+    const cancelledValue =
+      typeof rawCancelled === "string"
+        ? rawCancelled
+        : Array.isArray(rawCancelled) && typeof rawCancelled[0] === "string"
+          ? rawCancelled[0]
+          : "";
+    const cancelled = cancelledValue === "1" || cancelledValue.toLowerCase() === "true";
+    return { sessionId, cancelled };
+  }
 
   async function handlePurchase(pkg: CreditPackage) {
     setPurchaseLoading(pkg.id);
     try {
-      await purchasePackage(pkg.id);
+      if (nativePlatform) {
+        const iapProductId = resolveIapProductId(pkg.id, nativePlatform);
+        if (iap.isAvailable && iapProductId) {
+          const iapResult = await iap.purchaseProduct(iapProductId);
+          if (iapResult.cancelled) {
+            Alert.alert("Purchase canceled", "No payment was processed.");
+            return;
+          }
+          if (!iapResult.success) {
+            throw new Error(iapResult.error || "In-app purchase failed.");
+          }
+
+          await refreshCredits();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert("Success", `${pkg.credits} credits added to your account!`);
+          return;
+        }
+      }
+
+      const checkoutUrls = getCheckoutUrls();
+      const checkout = await purchasePackage(pkg.id, {
+        successUrl: checkoutUrls.successUrl,
+        cancelUrl: checkoutUrls.cancelUrl,
+      });
+      if (!checkout.url) throw new Error("Checkout URL unavailable");
+      const { sessionId, cancelled } = await runCheckout(checkout.url, checkoutUrls.redirectUrl);
+      if (cancelled) {
+        Alert.alert("Checkout canceled", "No payment was processed.");
+        return;
+      }
+      if (!sessionId) return;
+
+      const result = await verifyPaymentSession(sessionId);
+      if (!result.success) {
+        Alert.alert("Payment Pending", "Payment was not completed.");
+        return;
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Success", `${pkg.credits} credits added to your account!`);
     } catch (e: any) {
@@ -144,13 +256,57 @@ export default function CreditsScreen() {
   async function handleSubscribe(plan: SubscriptionPlan) {
     setSubLoading(plan.id);
     try {
-      await subscribeToPlan(plan.id);
+      const checkoutUrls = getCheckoutUrls();
+      const checkout = await subscribeToPlan(plan.id, {
+        successUrl: checkoutUrls.successUrl,
+        cancelUrl: checkoutUrls.cancelUrl,
+      });
+      if (!checkout.url) throw new Error("Checkout URL unavailable");
+      const { sessionId, cancelled } = await runCheckout(checkout.url, checkoutUrls.redirectUrl);
+      if (cancelled) {
+        Alert.alert("Checkout canceled", "No subscription payment was processed.");
+        return;
+      }
+      if (!sessionId) return;
+
+      const result = await verifyPaymentSession(sessionId);
+      if (!result.success) {
+        Alert.alert("Payment Pending", "Subscription payment was not completed.");
+        return;
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", `Subscribed to ${plan.name} plan! ${plan.creditsPerMonth} credits added.`);
+      Alert.alert("Success", `Subscribed to ${plan.name} plan!`);
     } catch (e: any) {
       Alert.alert("Error", e.message || "Subscription failed. Please try again.");
     } finally {
       setSubLoading(null);
+    }
+  }
+
+  async function handleGrantDevCredits() {
+    setDevGrantLoading(true);
+    try {
+      const result = await grantDevCredits(50);
+      Alert.alert(
+        "Test Credits Added",
+        `${result.grantedCredits} credits were added. Current balance: ${result.credits}.`,
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not add test credits.");
+    } finally {
+      setDevGrantLoading(false);
+    }
+  }
+
+  async function handleRestorePurchases() {
+    setRestoreLoading(true);
+    try {
+      await iap.restorePurchases();
+      await refreshCredits();
+    } finally {
+      setRestoreLoading(false);
     }
   }
 
@@ -175,6 +331,36 @@ export default function CreditsScreen() {
           </View>
         </Animated.View>
 
+        {showDevCreditTools && (
+          <Animated.View entering={FadeInDown.delay(120).duration(500)} style={styles.devToolsCard}>
+            <View style={styles.devToolsHeader}>
+              <Ionicons name="flask-outline" size={16} color={Colors.accent} />
+              <Text style={styles.devToolsTitle}>Developer Testing</Text>
+            </View>
+            <Text style={styles.devToolsText}>
+              Add test credits instantly to verify styling requests and credit deductions.
+            </Text>
+            <Pressable
+              onPress={handleGrantDevCredits}
+              disabled={devGrantLoading}
+              style={({ pressed }) => [
+                styles.devGrantButton,
+                pressed && { opacity: 0.85 },
+                devGrantLoading && { opacity: 0.7 },
+              ]}
+            >
+              {devGrantLoading ? (
+                <ActivityIndicator color={Colors.black} />
+              ) : (
+                <>
+                  <Ionicons name="add-circle-outline" size={18} color={Colors.black} />
+                  <Text style={styles.devGrantButtonText}>Add 50 Test Credits</Text>
+                </>
+              )}
+            </Pressable>
+          </Animated.View>
+        )}
+
         <View style={styles.tabs}>
           <Pressable
             onPress={() => setActiveTab("credits")}
@@ -197,7 +383,7 @@ export default function CreditsScreen() {
                 key={pkg.id}
                 pkg={pkg}
                 onPurchase={() => handlePurchase(pkg)}
-                loading={purchaseLoading === pkg.id}
+                loading={purchaseLoading === pkg.id || iap.isPurchasing}
               />
             ))}
           </Animated.View>
@@ -218,11 +404,26 @@ export default function CreditsScreen() {
         <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.paymentInfo}>
           <Text style={styles.paymentInfoTitle}>Payment Methods</Text>
           <View style={styles.paymentRow}>
-            {Platform.OS === "ios" ? (
+            {nativePlatform === "ios" ? (
               <>
                 <View style={styles.paymentMethod}>
                   <Ionicons name="logo-apple" size={20} color={Colors.white} />
-                  <Text style={styles.paymentMethodText}>Apple Pay</Text>
+                  <Text style={styles.paymentMethodText}>
+                    {iap.isAvailable ? "Apple In-App Purchase" : "Apple IAP (not configured)"}
+                  </Text>
+                </View>
+                <View style={styles.paymentMethod}>
+                  <Ionicons name="card-outline" size={20} color={Colors.white} />
+                  <Text style={styles.paymentMethodText}>Stripe</Text>
+                </View>
+              </>
+            ) : nativePlatform === "android" ? (
+              <>
+                <View style={styles.paymentMethod}>
+                  <Ionicons name="logo-google" size={20} color={Colors.white} />
+                  <Text style={styles.paymentMethodText}>
+                    {iap.isAvailable ? "Google Play Billing" : "Google Play IAP (not configured)"}
+                  </Text>
                 </View>
                 <View style={styles.paymentMethod}>
                   <Ionicons name="card-outline" size={20} color={Colors.white} />
@@ -232,10 +433,6 @@ export default function CreditsScreen() {
             ) : (
               <>
                 <View style={styles.paymentMethod}>
-                  <Ionicons name="logo-google" size={20} color={Colors.white} />
-                  <Text style={styles.paymentMethodText}>Google Pay</Text>
-                </View>
-                <View style={styles.paymentMethod}>
                   <Ionicons name="card-outline" size={20} color={Colors.white} />
                   <Text style={styles.paymentMethodText}>Stripe</Text>
                 </View>
@@ -243,9 +440,33 @@ export default function CreditsScreen() {
             )}
           </View>
           <Text style={styles.paymentNote}>
-            Secure payments processed via{" "}
-            {Platform.OS === "ios" ? "Apple Pay & Stripe" : "Google Pay & Stripe"}
+            {nativePlatform
+              ? "In-app purchases are used on mobile when configured. Stripe checkout remains available as fallback."
+              : "Secure Stripe checkout for web purchases."}
           </Text>
+          {nativePlatform && !iap.isLoading && !iap.isAvailable && iap.error ? (
+            <Text style={styles.paymentWarning}>{iap.error}</Text>
+          ) : null}
+          {nativePlatform && iap.isAvailable && (
+            <Pressable
+              onPress={handleRestorePurchases}
+              disabled={restoreLoading}
+              style={({ pressed }) => [
+                styles.restoreButton,
+                pressed && { opacity: 0.85 },
+                restoreLoading && { opacity: 0.7 },
+              ]}
+            >
+              {restoreLoading ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="refresh" size={16} color={Colors.white} />
+                  <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+                </>
+              )}
+            </Pressable>
+          )}
         </Animated.View>
       </ScrollView>
     </View>
@@ -298,6 +519,48 @@ const styles = StyleSheet.create({
     fontFamily: "PlayfairDisplay_700Bold",
     fontSize: 28,
     color: Colors.accent,
+  },
+  devToolsCard: {
+    marginHorizontal: 20,
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    gap: 10,
+    marginBottom: 20,
+  },
+  devToolsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  devToolsTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: Colors.accent,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  devToolsText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 19,
+  },
+  devGrantButton: {
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  devGrantButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: Colors.black,
   },
   tabs: {
     flexDirection: "row",
@@ -499,5 +762,29 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 12,
     color: Colors.textMuted,
+  },
+  paymentWarning: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#FFD7A0",
+    lineHeight: 18,
+  },
+  restoreButton: {
+    marginTop: 2,
+    alignSelf: "flex-start",
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    backgroundColor: Colors.surfaceLight,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  restoreButtonText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: Colors.white,
   },
 });

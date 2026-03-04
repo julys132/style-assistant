@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import Colors from "@/constants/colors";
@@ -97,12 +97,34 @@ export default function OutfitsScreen() {
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  const performDelete = useCallback(async (id: string) => {
+    try {
+      await removeOutfit(id);
+    } catch (error) {
+      console.error("Delete outfit failed:", error);
+      Alert.alert("Error", "Could not delete this outfit. Please try again.");
+    }
+  }, [removeOutfit]);
+
   const handleDelete = useCallback((id: string) => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const confirmed = window.confirm("Are you sure you want to delete this outfit?");
+      if (!confirmed) return;
+      void performDelete(id);
+      return;
+    }
+
     Alert.alert("Delete Outfit", "Are you sure you want to delete this outfit?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => removeOutfit(id) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void performDelete(id);
+        },
+      },
     ]);
-  }, [removeOutfit]);
+  }, [performDelete]);
 
   const handleDownload = useCallback(async (outfit: OutfitResult) => {
     if (!outfit.imageBase64) return;

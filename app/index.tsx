@@ -1,20 +1,33 @@
 import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { router } from "expo-router";
-import { View, ActivityIndicator } from "react-native";
-import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
 
 export default function IndexScreen() {
-  const { user, isLoading } = useAuth();
-
   useEffect(() => {
-    if (!isLoading) {
-      if (user) {
-        router.replace("/(main)/wardrobe");
-      } else {
-        router.replace("/(auth)/login");
+    let mounted = true;
+
+    (async () => {
+      try {
+        await apiClient.init();
+
+        if (!apiClient.isAuthenticated()) {
+          if (mounted) router.replace("/(auth)/login");
+          return;
+        }
+
+        await apiClient.getProfile();
+        if (mounted) router.replace("/(tabs)/wardrobe");
+      } catch {
+        await apiClient.clearAuth();
+        if (mounted) router.replace("/(auth)/login");
       }
-    }
-  }, [user, isLoading]);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
@@ -22,3 +35,4 @@ export default function IndexScreen() {
     </View>
   );
 }
+

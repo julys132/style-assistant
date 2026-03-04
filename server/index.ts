@@ -13,34 +13,74 @@ declare module "http" {
   }
 }
 
-function setupCors(app: express.Application) {
-  app.use((req, res, next) => {
-    const origins = new Set<string>();
+function normalizeOriginValue(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
 
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+  try {
+    const withProtocol = trimmed.includes("://") ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(withProtocol);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
     }
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return null;
+  }
+}
 
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
+function readConfiguredCorsOrigins(): Set<string> {
+  const origins = new Set<string>();
+  const configuredValues = [
+    process.env.CORS_ORIGINS,
+    process.env.CORS_ORIGIN,
+    process.env.EXPO_PUBLIC_APP_ORIGIN,
+    process.env.EXPO_PUBLIC_WEB_ORIGIN,
+  ];
+
+  for (const raw of configuredValues) {
+    if (!raw) continue;
+
+    raw
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((entry) => {
+        const normalized = normalizeOriginValue(entry);
+        if (normalized) origins.add(normalized);
       });
-    }
+  }
 
+  return origins;
+}
+
+function setupCors(app: express.Application) {
+  const configuredOrigins = readConfiguredCorsOrigins();
+  const isProduction = process.env.NODE_ENV === "production";
+
+  app.use((req, res, next) => {
     const origin = req.header("origin");
+    const normalizedOrigin = origin ? normalizeOriginValue(origin) : null;
 
-    // Allow localhost origins for Expo web development (any port)
     const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
+      normalizedOrigin?.startsWith("http://localhost:") ||
+      normalizedOrigin?.startsWith("http://127.0.0.1:") ||
+      normalizedOrigin?.startsWith("http://0.0.0.0:") ||
+      normalizedOrigin?.startsWith("https://localhost:") ||
+      normalizedOrigin?.startsWith("https://127.0.0.1:");
 
-    if (origin && (origins.has(origin) || isLocalhost)) {
+    const isConfiguredOrigin = normalizedOrigin ? configuredOrigins.has(normalizedOrigin) : false;
+    const allowOrigin = Boolean(
+      normalizedOrigin && (isConfiguredOrigin || isLocalhost || (!isProduction && configuredOrigins.size === 0)),
+    );
+
+    if (origin && allowOrigin) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, DELETE, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
@@ -55,13 +95,14 @@ function setupCors(app: express.Application) {
 function setupBodyParsing(app: express.Application) {
   app.use(
     express.json({
+      limit: "15mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       },
     }),
   );
 
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false, limit: "15mb" }));
 }
 
 function setupRequestLogging(app: express.Application) {

@@ -13,14 +13,17 @@ import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular } from "@
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { StatusBar } from "expo-status-bar";
 
-SplashScreen.preventAutoHideAsync();
+void SplashScreen.preventAutoHideAsync().catch((error) => {
+  console.warn("Failed to hold splash screen:", error);
+});
 
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#000" } }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" options={{ presentation: "modal", headerShown: false }} />
-      <Stack.Screen name="(main)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="payment-success" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -61,3 +64,4 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+

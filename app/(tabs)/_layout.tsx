@@ -102,6 +102,30 @@ function ClassicTabLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="style-preferences"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="favorites"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="help-support"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

@@ -41,16 +41,40 @@ export default function ProfileScreen() {
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   const activeSub = SUBSCRIPTION_PLANS.find(p => p.id === subscription);
+  const styleGenderLabel =
+    user?.styleGender === "female"
+      ? "Woman"
+      : user?.styleGender === "male"
+        ? "Man"
+        : user?.styleGender === "non_binary"
+          ? "Non-binary"
+          : "";
+
+  const performLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Sign out failed:", error);
+    } finally {
+      router.replace("/(auth)/login");
+    }
+  };
 
   const handleLogout = () => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const confirmed = window.confirm("Are you sure you want to sign out?");
+      if (!confirmed) return;
+      void performLogout();
+      return;
+    }
+
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign Out",
         style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/(auth)/login");
+        onPress: () => {
+          void performLogout();
         },
       },
     ]);
@@ -75,8 +99,13 @@ export default function ProfileScreen() {
                   text: "Yes, Delete Everything",
                   style: "destructive",
                   onPress: async () => {
-                    await deleteAccount();
-                    router.replace("/(auth)/login");
+                    try {
+                      await deleteAccount();
+                      router.replace("/(auth)/login");
+                    } catch (error) {
+                      console.error("Delete account failed:", error);
+                      Alert.alert("Error", "Could not delete account. Please try again.");
+                    }
                   },
                 },
               ]
@@ -103,6 +132,12 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.profileName}>{user?.name || "Guest"}</Text>
           <Text style={styles.profileEmail}>{user?.email || ""}</Text>
+          {styleGenderLabel ? (
+            <View style={styles.providerBadge}>
+              <Ionicons name="person-outline" size={14} color={Colors.accent} />
+              <Text style={styles.providerText}>{styleGenderLabel}</Text>
+            </View>
+          ) : null}
           {user?.provider && user.provider !== "email" && (
             <View style={styles.providerBadge}>
               <Ionicons
@@ -124,7 +159,7 @@ export default function ProfileScreen() {
               <Text style={styles.creditsValue}>{credits}</Text>
             </View>
             <Pressable
-              onPress={() => router.push("/(main)/credits" as any)}
+              onPress={() => router.push("/(tabs)/credits" as any)}
               style={({ pressed }) => [styles.buyCreditsBtn, pressed && { opacity: 0.8 }]}
             >
               <Ionicons name="add" size={18} color={Colors.black} />
@@ -146,11 +181,11 @@ export default function ProfileScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.menuSection}>
-          <MenuItem icon="diamond-outline" label="Credits & Subscription" onPress={() => router.push("/(main)/credits" as any)} />
-          <MenuItem icon="color-palette-outline" label="Style Preferences" onPress={() => {}} />
-          <MenuItem icon="heart-outline" label="Favorites" onPress={() => {}} />
-          <MenuItem icon="notifications-outline" label="Notifications" onPress={() => {}} />
-          <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => {}} />
+          <MenuItem icon="diamond-outline" label="Credits & Subscription" onPress={() => router.push("/(tabs)/credits" as any)} />
+          <MenuItem icon="color-palette-outline" label="Style Preferences" onPress={() => router.push("/(tabs)/style-preferences" as any)} />
+          <MenuItem icon="heart-outline" label="Favorites" onPress={() => router.push("/(tabs)/favorites" as any)} />
+          <MenuItem icon="notifications-outline" label="Notifications" onPress={() => router.push("/(tabs)/notifications" as any)} />
+          <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => router.push("/(tabs)/help-support" as any)} />
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.dangerSection}>
@@ -379,3 +414,4 @@ const styles = StyleSheet.create({
     color: "#FF6666",
   },
 });
+

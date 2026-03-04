@@ -39,21 +39,21 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
-  // Check Replit deployment environment variables first
-  if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
-    return stripProtocol(process.env.REPLIT_INTERNAL_APP_DOMAIN);
-  }
+  const domainCandidates = [
+    process.env.DEPLOYMENT_DOMAIN,
+    process.env.PUBLIC_APP_DOMAIN,
+    process.env.EXPO_PUBLIC_APP_DOMAIN,
+    process.env.EXPO_PUBLIC_DOMAIN,
+  ];
 
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return stripProtocol(process.env.REPLIT_DEV_DOMAIN);
-  }
-
-  if (process.env.EXPO_PUBLIC_DOMAIN) {
-    return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
+  for (const candidate of domainCandidates) {
+    if (candidate && candidate.trim()) {
+      return stripProtocol(candidate);
+    }
   }
 
   console.error(
-    "ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN",
+    "ERROR: No deployment domain found. Set DEPLOYMENT_DOMAIN or EXPO_PUBLIC_APP_DOMAIN (or EXPO_PUBLIC_DOMAIN).",
   );
   process.exit(1);
 }
@@ -497,7 +497,7 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
 }
 
 async function main() {
-  console.log("Building static Expo Go deployment...");
+  console.log("Building static Expo deployment...");
 
   setupSignalHandlers();
 

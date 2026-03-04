@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "./AuthContext";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface CreditPackage {
   id: string;
@@ -55,108 +55,116 @@ interface CreditsContextValue {
   credits: number;
   subscription: string | null;
   isLoading: boolean;
-  useCredit: () => Promise<boolean>;
-  addCredits: (amount: number) => Promise<void>;
-  setSubscription: (planId: string | null) => Promise<void>;
-  purchasePackage: (packageId: string) => Promise<void>;
-  subscribeToPlan: (planId: string) => Promise<void>;
+  refreshCredits: () => Promise<void>;
+  useCredit: (feature?: string) => Promise<boolean>;
+  purchasePackage: (
+    packageId: string,
+    urls?: { successUrl?: string; cancelUrl?: string },
+  ) => Promise<{ url: string; sessionId: string }>;
+  subscribeToPlan: (
+    planId: string,
+    urls?: { successUrl?: string; cancelUrl?: string },
+  ) => Promise<{ url: string; sessionId: string }>;
+  verifyPaymentSession: (
+    sessionId: string | string[],
+  ) => Promise<{ success: boolean; credits: number; subscription: string | null }>;
+  grantDevCredits: (amount?: number) => Promise<{ success: boolean; grantedCredits: number; credits: number }>;
 }
 
 const CreditsContext = createContext<CreditsContextValue | null>(null);
 
 export function CreditsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const [credits, setCredits] = useState(3);
-  const [subscription, setSubscriptionState] = useState<string | null>(null);
+  const { user, isLoading: authLoading } = useAuth();
+  const [credits, setCredits] = useState(0);
+  const [subscription, setSubscription] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      loadCredits();
-    } else {
-      setCredits(3);
-      setSubscriptionState(null);
-      setIsLoading(false);
-    }
-  }, [user?.id]);
+    if (authLoading) return;
 
-  async function loadCredits() {
-    try {
-      const key = `@stylist_credits_${user?.id}`;
-      const subKey = `@stylist_sub_${user?.id}`;
-      const [storedCredits, storedSub] = await Promise.all([
-        AsyncStorage.getItem(key),
-        AsyncStorage.getItem(subKey),
-      ]);
-      if (storedCredits !== null) {
-        setCredits(parseInt(storedCredits, 10));
-      } else {
-        await AsyncStorage.setItem(key, "3");
-        setCredits(3);
-      }
-      if (storedSub) setSubscriptionState(storedSub);
-    } catch (e) {
-      console.error("Failed to load credits:", e);
-    } finally {
+    if (!user) {
+      setCredits(0);
+      setSubscription(null);
       setIsLoading(false);
+      return;
     }
+
+    setIsLoading(true);
+    refreshCredits()
+      .catch((error) => {
+        const status = (error as { status?: number } | null)?.status;
+        if (status === 401) {
+          setCredits(0);
+          setSubscription(null);
+          return;
+        }
+        console.error("Failed to load credits:", error);
+      })
+      .finally(() => setIsLoading(false));
+  }, [authLoading, user?.id]);
+
+  async function refreshCredits() {
+    const data = await apiClient.getCredits();
+    setCredits(data.credits ?? 0);
+    setSubscription(data.subscription ?? null);
   }
 
-  const saveCredits = useCallback(async (amount: number) => {
-    if (!user) return;
-    await AsyncStorage.setItem(`@stylist_credits_${user.id}`, amount.toString());
-  }, [user]);
-
-  const useCredit = useCallback(async () => {
-    if (credits < 1) return false;
-    const newCredits = credits - 1;
-    setCredits(newCredits);
-    await saveCredits(newCredits);
+  async function useCredit(feature: string = "style_generation"): Promise<boolean> {
+    const data = await apiClient.useCredit(feature);
+    setCredits(data.credits ?? 0);
     return true;
-  }, [credits, saveCredits]);
+  }
 
-  const addCredits = useCallback(async (amount: number) => {
-    const newCredits = credits + amount;
-    setCredits(newCredits);
-    await saveCredits(newCredits);
-  }, [credits, saveCredits]);
+  async function purchasePackage(
+    packageId: string,
+    urls?: { successUrl?: string; cancelUrl?: string },
+  ): Promise<{ url: string; sessionId: string }> {
+    return apiClient.createCheckoutSession({
+      itemType: "package",
+      itemId: packageId,
+      successUrl: urls?.successUrl,
+      cancelUrl: urls?.cancelUrl,
+    });
+  }
 
-  const setSubscription = useCallback(async (planId: string | null) => {
-    if (!user) return;
-    setSubscriptionState(planId);
-    if (planId) {
-      await AsyncStorage.setItem(`@stylist_sub_${user.id}`, planId);
-      const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId);
-      if (plan) {
-        await addCredits(plan.creditsPerMonth);
-      }
-    } else {
-      await AsyncStorage.removeItem(`@stylist_sub_${user.id}`);
-    }
-  }, [user, addCredits]);
+  async function subscribeToPlan(
+    planId: string,
+    urls?: { successUrl?: string; cancelUrl?: string },
+  ): Promise<{ url: string; sessionId: string }> {
+    return apiClient.createCheckoutSession({
+      itemType: "subscription",
+      itemId: planId,
+      successUrl: urls?.successUrl,
+      cancelUrl: urls?.cancelUrl,
+    });
+  }
 
-  const purchasePackage = useCallback(async (packageId: string) => {
-    const pkg = CREDIT_PACKAGES.find(p => p.id === packageId);
-    if (!pkg) throw new Error("Invalid package");
-    await addCredits(pkg.credits);
-  }, [addCredits]);
+  async function verifyPaymentSession(sessionId: string | string[]) {
+    const result = await apiClient.verifyPaymentSession(sessionId);
+    setCredits(result.credits ?? 0);
+    setSubscription(result.subscription ?? null);
+    return result;
+  }
 
-  const subscribeToPlan = useCallback(async (planId: string) => {
-    await setSubscription(planId);
-  }, [setSubscription]);
+  async function grantDevCredits(amount?: number) {
+    const result = await apiClient.grantDevCredits(amount);
+    setCredits(result.credits ?? 0);
+    return result;
+  }
 
   const value = useMemo(
     () => ({
       credits,
       subscription,
       isLoading,
+      refreshCredits,
       useCredit,
-      addCredits,
-      setSubscription,
       purchasePackage,
       subscribeToPlan,
+      verifyPaymentSession,
+      grantDevCredits,
     }),
-    [credits, subscription, isLoading, useCredit, addCredits, setSubscription, purchasePackage, subscribeToPlan]
+    [credits, subscription, isLoading],
   );
 
   return <CreditsContext.Provider value={value}>{children}</CreditsContext.Provider>;
