@@ -52,6 +52,8 @@ export default function LoginScreen() {
   }, []);
 
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const resolvedGoogleWebClientId =
+    googleWebClientId || "placeholder.apps.googleusercontent.com";
   const nativeGoogleWebClientId = googleWebClientId || "";
   const googleIosClientId =
     process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || googleWebClientId;
@@ -65,10 +67,10 @@ export default function LoginScreen() {
     Platform.OS === "android" ? googleNativeConfigured : googleAuthSessionConfigured;
 
   const googleAuthConfig: any = {
-    ...(googleWebClientId
+    ...(resolvedGoogleWebClientId
       ? {
-          clientId: googleWebClientId,
-          webClientId: googleWebClientId,
+          clientId: resolvedGoogleWebClientId,
+          webClientId: resolvedGoogleWebClientId,
         }
       : {}),
     ...(googleIosClientId ? { iosClientId: googleIosClientId } : {}),
@@ -279,7 +281,11 @@ export default function LoginScreen() {
 
   const showApple = Platform.OS === "ios" && appleAuthAvailable;
   const showGoogle =
-    Platform.OS === "android" ? googleIsConfigured && !!googleNativeModule : googleIsConfigured;
+    Platform.OS === "web"
+      ? true
+      : Platform.OS === "android"
+        ? googleIsConfigured && !!googleNativeModule
+        : googleIsConfigured;
 
   return (
     <View style={styles.container}>

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { router } from "expo-router";
-import { apiClient } from "@/lib/api-client";
+import { API_BASE_URL, apiClient } from "@/lib/api-client";
 
 export default function IndexScreen() {
   useEffect(() => {
@@ -9,6 +9,16 @@ export default function IndexScreen() {
 
     (async () => {
       try {
+        try {
+          const health = await apiClient.healthCheck();
+          console.log("[startup] API reachable", { baseUrl: API_BASE_URL, health });
+        } catch (healthError) {
+          console.warn("[startup] API health check failed", {
+            baseUrl: API_BASE_URL,
+            message: healthError instanceof Error ? healthError.message : String(healthError),
+          });
+        }
+
         await apiClient.init();
 
         if (!apiClient.isAuthenticated()) {

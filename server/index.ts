@@ -109,7 +109,15 @@ function setupRequestLogging(app: express.Application) {
   app.use((req, res, next) => {
     const start = Date.now();
     const path = req.path;
+    const headerRequestId = req.header("x-client-request-id");
+    const requestId =
+      typeof headerRequestId === "string" && headerRequestId.trim().length > 0
+        ? headerRequestId.trim()
+        : `srv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const clientPlatform = req.header("x-client-platform") || "unknown";
     let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
+
+    res.setHeader("x-request-id", requestId);
 
     const originalResJson = res.json;
     res.json = function (bodyJson, ...args) {
@@ -121,14 +129,14 @@ function setupRequestLogging(app: express.Application) {
       if (!path.startsWith("/api")) return;
 
       const duration = Date.now() - start;
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms [rid:${requestId}] [platform:${clientPlatform}]`;
 
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+      if (logLine.length > 220) {
+        logLine = logLine.slice(0, 219) + "...";
       }
 
       log(logLine);
@@ -289,3 +297,4 @@ function setupErrorHandler(app: express.Application) {
     },
   );
 })();
+

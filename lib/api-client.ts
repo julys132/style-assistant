@@ -21,6 +21,23 @@ export type SocialLoginPayload =
       name?: string;
     };
 
+const NETWORK_DEBUG_ENABLED = process.env.EXPO_PUBLIC_DEBUG_NETWORK === "true";
+
+function shouldDebugNetwork(): boolean {
+  return __DEV__ || NETWORK_DEBUG_ENABLED;
+}
+
+function createRequestId(): string {
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return String(error);
+}
+
 function withApiPortIfNeeded(hostOrDomain: string): string {
   const trimmed = hostOrDomain.trim();
   if (!trimmed) return trimmed;
@@ -102,10 +119,14 @@ class ApiClient {
     requireAuth: boolean = true,
   ): Promise<T> {
     const url = `${API_BASE_URL}/api${endpoint}`;
+    const requestId = createRequestId();
+    const requestStartedAt = Date.now();
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     };
+    (headers as Record<string, string>)["X-Client-Request-Id"] = requestId;
+    (headers as Record<string, string>)["X-Client-Platform"] = Platform.OS;
 
     if (requireAuth && this.accessToken) {
       (headers as Record<string, string>).Authorization = `Bearer ${this.accessToken}`;
@@ -118,6 +139,10 @@ class ApiClient {
       }
     }
 
+    if (shouldDebugNetwork()) {
+      console.log(`[API][start][${requestId}] ${options.method || "GET"} ${url}`);
+    }
+
     const doFetch = async () => {
       try {
         return await fetch(url, { ...options, headers });
@@ -126,6 +151,7 @@ class ApiClient {
           `Could not connect to API (${API_BASE_URL}). Make sure backend server is running.`,
         );
         err.cause = error;
+        err.requestId = requestId;
         throw err;
       }
     };
@@ -174,6 +200,7 @@ class ApiClient {
       err.status = response.status;
       err.data = data;
       err.rawText = textBody;
+      err.requestId = requestId;
       throw err;
     }
 
@@ -184,7 +211,14 @@ class ApiClient {
       );
       err.status = response.status;
       err.rawText = textBody;
+      err.requestId = requestId;
       throw err;
+    }
+
+    if (shouldDebugNetwork()) {
+      console.log(
+        `[API][ok][${requestId}] ${response.status} ${options.method || "GET"} ${endpoint} in ${Date.now() - requestStartedAt}ms`,
+      );
     }
 
     return data as T;
@@ -337,6 +371,26 @@ class ApiClient {
       },
       true,
     );
+  }
+
+  async healthCheck() {
+    try {
+      const response = await this.request<{
+        status: string;
+        service: string;
+        timestamp: string;
+        requestId?: string | null;
+      }>("/health", {}, false);
+      if (shouldDebugNetwork()) {
+        console.log(`[API][health] reachable`, response);
+      }
+      return response;
+    } catch (error) {
+      if (shouldDebugNetwork()) {
+        console.warn(`[API][health] failed: ${extractErrorMessage(error)}`);
+      }
+      throw error;
+    }
   }
 
   async getCredits() {

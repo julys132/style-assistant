@@ -1348,6 +1348,17 @@ async function getGoogleAccessToken(jwt: string): Promise<string> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.get("/api/health", (_req, res) => {
+    const headerRequestId = firstHeaderValue(_req.headers["x-client-request-id"]);
+    return res.json({
+      status: "ok",
+      service: "style-assistant-api",
+      timestamp: new Date().toISOString(),
+      requestId: headerRequestId || null,
+      nodeEnv: process.env.NODE_ENV || "unknown",
+    });
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { name, email, password } = req.body ?? {};
