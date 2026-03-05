@@ -34,8 +34,9 @@ interface WardrobeContextValue {
 }
 
 const WardrobeContext = createContext<WardrobeContextValue | null>(null);
-const MAX_STORED_OUTFITS = 40;
-const MAX_IMAGE_BASE64_LENGTH_FOR_STORAGE = 2_500_000;
+const MAX_STORED_OUTFITS = 20;
+const MAX_IMAGE_BASE64_LENGTH_FOR_STORAGE = 350_000;
+const MAX_TOTAL_IMAGE_BASE64_CHARS = 1_200_000;
 
 function parseStoredArray<T>(rawValue: string | null): T[] {
   if (!rawValue) return [];
@@ -71,6 +72,32 @@ function removeImageFromOutfit(outfit: OutfitResult): OutfitResult {
   return rest;
 }
 
+function enforceImageStorageBudget(outfits: OutfitResult[]): OutfitResult[] {
+  const constrained = [...outfits];
+  let totalImageChars = constrained.reduce(
+    (sum, outfit) => sum + (outfit.imageBase64 ? outfit.imageBase64.length : 0),
+    0,
+  );
+
+  if (totalImageChars <= MAX_TOTAL_IMAGE_BASE64_CHARS) {
+    return constrained;
+  }
+
+  for (let index = constrained.length - 1; index >= 0; index -= 1) {
+    const current = constrained[index];
+    if (!current.imageBase64) continue;
+
+    totalImageChars -= current.imageBase64.length;
+    constrained[index] = removeImageFromOutfit(current);
+
+    if (totalImageChars <= MAX_TOTAL_IMAGE_BASE64_CHARS) {
+      break;
+    }
+  }
+
+  return constrained;
+}
+
 function shouldSyncOutfitState(current: OutfitResult[], persisted: OutfitResult[]): boolean {
   if (current.length !== persisted.length) return true;
 
@@ -95,9 +122,11 @@ export function WardrobeProvider({ children }: { children: ReactNode }) {
 
   const persistOutfits = useCallback(
     async (nextOutfits: OutfitResult[]): Promise<OutfitResult[]> => {
-      const sanitized = nextOutfits
-        .slice(0, MAX_STORED_OUTFITS)
-        .map((outfit) => sanitizeOutfitForStorage(outfit));
+      const sanitized = enforceImageStorageBudget(
+        nextOutfits
+          .slice(0, MAX_STORED_OUTFITS)
+          .map((outfit) => sanitizeOutfitForStorage(outfit)),
+      );
 
       try {
         await AsyncStorage.setItem(outfitsKey, JSON.stringify(sanitized));
@@ -148,8 +177,20 @@ export function WardrobeProvider({ children }: { children: ReactNode }) {
         AsyncStorage.getItem(wardrobeKey),
         AsyncStorage.getItem(outfitsKey),
       ]);
-      setItems(parseStoredArray<ClothingItem>(storedItems));
-      setOutfits(parseStoredArray<OutfitResult>(storedOutfits));
+      const parsedItems = parseStoredArray<ClothingItem>(storedItems);
+      const parsedOutfits = parseStoredArray<OutfitResult>(storedOutfits);
+      const normalizedOutfits = enforceImageStorageBudget(
+        parsedOutfits
+          .slice(0, MAX_STORED_OUTFITS)
+          .map((outfit) => sanitizeOutfitForStorage(outfit)),
+      );
+
+      setItems(parsedItems);
+      setOutfits(normalizedOutfits);
+
+      if (shouldSyncOutfitState(parsedOutfits, normalizedOutfits)) {
+        await AsyncStorage.setItem(outfitsKey, JSON.stringify(normalizedOutfits));
+      }
     } catch (e) {
       console.error("Failed to load wardrobe:", e);
       setItems([]);

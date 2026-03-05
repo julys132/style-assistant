@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "The Stylist",
+    "owner": "iulias",
     "slug": "the-stylist",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +17,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.iulia.muse",
-      "usesAppleSignIn": true
+      "buildNumber": "4",
+      "usesAppleSignIn": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.iulia.muse",
@@ -40,6 +48,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8186b0ca-bf42-481c-8244-93435fd303c3"
+      }
     }
   }
 }

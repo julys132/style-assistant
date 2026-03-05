@@ -91,17 +91,29 @@ const STYLE_COSTS: Record<OutputMode, number> = {
 };
 
 const MAX_PHOTOS_BY_MODE: Record<ImageInputMode, number> = {
-  single_item: 10,
-  multi_item: 3,
+  single_item: 6,
+  multi_item: 2,
 };
-const MAX_UPLOAD_IMAGE_BASE64_LENGTH = 2_300_000;
-const WEB_IMAGE_MAX_DIMENSION = 1800;
-const WEB_IMAGE_MIN_DIMENSION = 900;
-const WEB_IMAGE_MAX_ATTEMPTS = 6;
+const MAX_UPLOAD_IMAGE_BASE64_LENGTH = 450_000;
+const MAX_SAVED_OUTFIT_IMAGE_BASE64_LENGTH = 350_000;
+const MAX_RENDER_RESULT_IMAGE_BASE64_LENGTH = 900_000;
+const WEB_IMAGE_MAX_DIMENSION = 1280;
+const WEB_IMAGE_MIN_DIMENSION = 512;
+const WEB_IMAGE_MAX_ATTEMPTS = 8;
 
 function stripDataUriPrefix(base64OrDataUri: string): string {
   const commaIndex = base64OrDataUri.indexOf(",");
   return commaIndex >= 0 ? base64OrDataUri.slice(commaIndex + 1) : base64OrDataUri;
+}
+
+function sanitizeGeneratedImage(
+  imageBase64: unknown,
+  maxLength: number,
+): string | undefined {
+  if (typeof imageBase64 !== "string") return undefined;
+  const normalized = stripDataUriPrefix(imageBase64.trim());
+  if (!normalized || normalized.length > maxLength) return undefined;
+  return normalized;
 }
 
 async function compressImageForWeb(base64: string, mimeType: string): Promise<UploadedPhoto> {
@@ -128,7 +140,7 @@ async function compressImageForWeb(base64: string, mimeType: string): Promise<Up
 
   let bestBase64 = sourceBase64;
   let maxDimension = WEB_IMAGE_MAX_DIMENSION;
-  let quality = 0.82;
+  let quality = 0.68;
 
   for (let attempt = 0; attempt < WEB_IMAGE_MAX_ATTEMPTS; attempt += 1) {
     const scale = Math.min(1, maxDimension / Math.max(width, height));
@@ -153,7 +165,7 @@ async function compressImageForWeb(base64: string, mimeType: string): Promise<Up
     }
 
     maxDimension = Math.max(WEB_IMAGE_MIN_DIMENSION, Math.floor(maxDimension * 0.84));
-    quality = Math.max(0.45, quality - 0.08);
+    quality = Math.max(0.3, quality - 0.08);
   }
 
   return { uri: "", base64: bestBase64, mimeType: "image/jpeg" };
@@ -517,7 +529,7 @@ export default function StylistScreen() {
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
-      quality: 0.55,
+      quality: 0.35,
       base64: true,
     });
 
@@ -546,7 +558,7 @@ export default function StylistScreen() {
 
     const cameraResult = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      quality: 0.55,
+      quality: 0.35,
       base64: true,
     });
 
@@ -627,16 +639,37 @@ export default function StylistScreen() {
           mimeType: photo.mimeType,
         })),
       });
-      setResult(data);
+      const renderImageBase64 = sanitizeGeneratedImage(
+        data.imageBase64,
+        MAX_RENDER_RESULT_IMAGE_BASE64_LENGTH,
+      );
+      const savedImageBase64 = sanitizeGeneratedImage(
+        data.imageBase64,
+        MAX_SAVED_OUTFIT_IMAGE_BASE64_LENGTH,
+      );
+      setResult({
+        ...data,
+        imageBase64: renderImageBase64,
+      });
       setPendingOutfitSave({
         items: selectedClothing,
         occasion: resolvedOccasion,
         description: data.description,
         stylingTips: data.tips || [],
-        imageBase64: data.imageBase64,
+        imageBase64: savedImageBase64,
       });
       setIsCurrentLookSaved(false);
-      setActionHint("");
+      if (data.imageBase64 && !renderImageBase64) {
+        setActionHint(
+          "Generated image is too large for this device. Text result is kept to avoid memory crashes.",
+        );
+      } else if (renderImageBase64 && !savedImageBase64) {
+        setActionHint(
+          "Image is shown now, but it will not be stored locally to keep memory usage low.",
+        );
+      } else {
+        setActionHint("");
+      }
       await refreshCredits();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -775,16 +808,37 @@ export default function StylistScreen() {
           mimeType: photo.mimeType,
         })),
       });
-      setResult(data);
+      const renderImageBase64 = sanitizeGeneratedImage(
+        data.imageBase64,
+        MAX_RENDER_RESULT_IMAGE_BASE64_LENGTH,
+      );
+      const savedImageBase64 = sanitizeGeneratedImage(
+        data.imageBase64,
+        MAX_SAVED_OUTFIT_IMAGE_BASE64_LENGTH,
+      );
+      setResult({
+        ...data,
+        imageBase64: renderImageBase64,
+      });
       setPendingOutfitSave({
         items: selectedClothing,
         occasion: resolvedOccasion,
         description: data.description,
         stylingTips: data.tips || [],
-        imageBase64: data.imageBase64,
+        imageBase64: savedImageBase64,
       });
       setIsCurrentLookSaved(false);
-      setActionHint("");
+      if (data.imageBase64 && !renderImageBase64) {
+        setActionHint(
+          "Generated image is too large for this device. Text result is kept to avoid memory crashes.",
+        );
+      } else if (renderImageBase64 && !savedImageBase64) {
+        setActionHint(
+          "Image is shown now, but it will not be stored locally to keep memory usage low.",
+        );
+      } else {
+        setActionHint("");
+      }
       await refreshCredits();
 
       setModifyPrompt("");
