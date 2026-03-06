@@ -7,6 +7,11 @@ import * as path from "path";
 const app = express();
 const log = console.log;
 
+// Lightweight liveness endpoint used by Railway health checks.
+app.get("/healthz", (_req, res) => {
+  res.status(200).send("ok");
+});
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
