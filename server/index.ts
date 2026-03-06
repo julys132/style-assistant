@@ -280,12 +280,13 @@ function configureExpoAndLanding(app: express.Application) {
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
 
   if (hasWebBuild) {
-    app.use((req, res, next) => {
+    app.use("/", (req, res, next) => {
       if (req.path.startsWith("/api") || req.path === "/manifest") {
         return next();
       }
       return res.sendFile(webIndexPath);
     });
+    log("SPA fallback configured with app.use('/')");
   }
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
