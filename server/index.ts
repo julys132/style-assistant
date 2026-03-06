@@ -216,23 +216,49 @@ function configureExpoAndLanding(app: express.Application) {
     "templates",
     "landing-page.html",
   );
+  const webBuildPath = path.resolve(process.cwd(), "static-build", "web");
+  const webIndexPath = path.join(webBuildPath, "index.html");
+  const hasWebBuild = fs.existsSync(webIndexPath);
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
   log("Serving static Expo files with dynamic manifest routing");
+  if (hasWebBuild) {
+    log("Web build detected. Serving web app at / and landing page at /preview");
+  } else {
+    log("Web build missing. Serving landing page at /");
+  }
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
       return next();
     }
 
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
+    const platform = req.header("expo-platform");
+    const isExpoPlatform = platform === "ios" || platform === "android";
+
+    if (req.path === "/manifest") {
+      if (isExpoPlatform) {
+        return serveExpoManifest(platform, res);
+      }
+      return res.status(400).json({ error: "Missing or invalid expo-platform header" });
     }
 
-    const platform = req.header("expo-platform");
-    if (platform && (platform === "ios" || platform === "android")) {
+    if (req.path === "/" && isExpoPlatform) {
       return serveExpoManifest(platform, res);
+    }
+
+    if (req.path === "/preview") {
+      return serveLandingPage({
+        req,
+        res,
+        landingPageTemplate,
+        appName,
+      });
+    }
+
+    if (req.path === "/" && hasWebBuild) {
+      return res.sendFile(webIndexPath);
     }
 
     if (req.path === "/") {
@@ -248,7 +274,19 @@ function configureExpoAndLanding(app: express.Application) {
   });
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
+  if (hasWebBuild) {
+    app.use(express.static(webBuildPath));
+  }
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
+
+  if (hasWebBuild) {
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api") || req.path === "/manifest") {
+        return next();
+      }
+      return res.sendFile(webIndexPath);
+    });
+  }
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
