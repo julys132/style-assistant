@@ -220,7 +220,6 @@ export default function StylistOptionsSection({
 }: StylistOptionsSectionProps) {
   const summaryCardStyle =
     screenWidth >= 340 ? styles.preferenceSummaryCardHalf : styles.preferenceSummaryCardFull;
-  const stackChoiceRows = screenWidth < 440;
 
   const collapseAllOptionCards = () => {
     setShowLookPlan(false);
@@ -270,7 +269,7 @@ export default function StylistOptionsSection({
             onPress={() => toggleCard("look_plan")}
             styles={styles}
           >
-            <View style={[styles.modeRow, stackChoiceRows ? styles.modeRowStacked : undefined]}>
+            <View style={[styles.modeRow, styles.modeRowStacked]}>
               <Pressable
                 onPress={() => {
                   setOutputMode("text");
@@ -278,7 +277,7 @@ export default function StylistOptionsSection({
                 }}
                 style={[
                   styles.modeChip,
-                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  styles.modeChipStacked,
                   outputMode === "text" ? styles.modeChipActive : undefined,
                 ]}
               >
@@ -296,7 +295,7 @@ export default function StylistOptionsSection({
                 }}
                 style={[
                   styles.modeChip,
-                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  styles.modeChipStacked,
                   outputMode === "image" ? styles.modeChipActive : undefined,
                 ]}
               >
@@ -319,12 +318,12 @@ export default function StylistOptionsSection({
             styles={styles}
           >
             <Text style={styles.inlineHelperText}>Only needed if you upload photos.</Text>
-            <View style={[styles.modeRow, stackChoiceRows ? styles.modeRowStacked : undefined]}>
+            <View style={[styles.modeRow, styles.modeRowStacked]}>
               <Pressable
                 onPress={() => updateImageInputMode("single_item")}
                 style={[
                   styles.modeChip,
-                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  styles.modeChipStacked,
                   imageInputMode === "single_item" ? styles.modeChipActive : undefined,
                 ]}
               >
@@ -339,7 +338,7 @@ export default function StylistOptionsSection({
                 onPress={() => updateImageInputMode("multi_item")}
                 style={[
                   styles.modeChip,
-                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  styles.modeChipStacked,
                   imageInputMode === "multi_item" ? styles.modeChipActive : undefined,
                 ]}
               >

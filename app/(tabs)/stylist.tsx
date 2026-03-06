@@ -1310,7 +1310,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   modeRow: { flexDirection: "row", gap: 10 },
-  modeRowStacked: { flexDirection: "column" },
+  modeRowStacked: { flexDirection: "column", gap: 8 },
   modeChip: {
     flex: 1,
     borderRadius: 14,
@@ -1320,9 +1320,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 2,
+    minHeight: 64,
+    justifyContent: "center",
+    alignItems: "flex-start",
   },
   modeChipStacked: {
     flex: 0,
+    width: "100%",
   },
   modeChipActive: {
     backgroundColor: "rgba(201, 169, 110, 0.18)",
@@ -1331,21 +1335,27 @@ const styles = StyleSheet.create({
   modeChipTitle: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 12,
+    lineHeight: 18,
     color: Colors.white,
   },
   modeChipTitleActive: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 12,
+    lineHeight: 18,
     color: Colors.accent,
   },
   modeChipSubtitle: {
     fontFamily: "Inter_400Regular",
     fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
     color: Colors.textSecondary,
   },
   modeChipSubtitleActive: {
     fontFamily: "Inter_400Regular",
     fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
     color: Colors.accent,
   },
   uploadSectionTitle: {
