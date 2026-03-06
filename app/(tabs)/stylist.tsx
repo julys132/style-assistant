@@ -28,7 +28,7 @@ import { useCredits } from "@/contexts/CreditsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
 import { router } from "expo-router";
-import StylistBuilderSection from "./components/StylistBuilderSection";
+import StylistOptionsSection from "@/components/stylist/StylistOptionsSection";
 
 const OCCASIONS = [
   "Casual Day Out",
@@ -942,7 +942,7 @@ export default function StylistScreen() {
           )}
         </Animated.View>
 
-        <StylistBuilderSection
+        <StylistOptionsSection
           styles={styles}
           screenWidth={screenWidth}
           outputMode={outputMode}
@@ -1238,6 +1238,9 @@ const styles = StyleSheet.create({
   preferenceSummaryCardFull: {
     width: "100%",
   },
+  preferenceSummaryCardExpanded: {
+    width: "100%",
+  },
   preferenceSummaryCardActive: {
     borderColor: Colors.accent,
     backgroundColor: "rgba(201, 169, 110, 0.1)",
@@ -1307,6 +1310,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   modeRow: { flexDirection: "row", gap: 10 },
+  modeRowStacked: { flexDirection: "column" },
   modeChip: {
     flex: 1,
     borderRadius: 14,
@@ -1316,6 +1320,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 2,
+  },
+  modeChipStacked: {
+    flex: 0,
   },
   modeChipActive: {
     backgroundColor: "rgba(201, 169, 110, 0.18)",

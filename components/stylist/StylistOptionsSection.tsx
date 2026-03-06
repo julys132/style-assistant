@@ -15,7 +15,7 @@ type GenderOption = {
   value: "female" | "male" | "non_binary";
 };
 
-type StylistBuilderSectionProps = {
+type StylistOptionsSectionProps = {
   styles: Record<string, any>;
   screenWidth: number;
   outputMode: OutputMode;
@@ -106,7 +106,7 @@ function CollapsibleSection({
   );
 }
 
-function PreferenceSummaryCard({
+function OptionCard({
   title,
   value,
   active,
@@ -117,7 +117,7 @@ function PreferenceSummaryCard({
 }: {
   title: string;
   value: string;
-  active?: boolean;
+  active: boolean;
   cardStyle?: ViewStyle;
   onPress: () => void;
   styles: Record<string, any>;
@@ -130,6 +130,7 @@ function PreferenceSummaryCard({
         styles.preferenceSummaryCard,
         cardStyle,
         active ? styles.preferenceSummaryCardActive : undefined,
+        active ? styles.preferenceSummaryCardExpanded : undefined,
       ]}
     >
       <Pressable onPress={onPress} style={({ pressed }) => [pressed ? { opacity: 0.82 } : undefined]}>
@@ -156,7 +157,7 @@ function PreferenceSummaryCard({
   );
 }
 
-export default function StylistBuilderSection({
+export default function StylistOptionsSection({
   styles,
   screenWidth,
   outputMode,
@@ -216,9 +217,39 @@ export default function StylistBuilderSection({
   aestheticOptions,
   paletteOptions,
   genderOptions,
-}: StylistBuilderSectionProps) {
+}: StylistOptionsSectionProps) {
   const summaryCardStyle =
     screenWidth >= 340 ? styles.preferenceSummaryCardHalf : styles.preferenceSummaryCardFull;
+  const stackChoiceRows = screenWidth < 440;
+
+  const collapseAllOptionCards = () => {
+    setShowLookPlan(false);
+    setShowPhotoMode(false);
+    setShowLookDetails(false);
+    setShowOccasion(false);
+    setShowPreferences(false);
+    setShowSeason(false);
+    setShowAesthetic(false);
+    setShowPalette(false);
+  };
+
+  const toggleCard = (card: "look_plan" | "photo_mode" | "look_details" | "occasion" | "preferences") => {
+    const isActive =
+      (card === "look_plan" && showLookPlan) ||
+      (card === "photo_mode" && showPhotoMode) ||
+      (card === "look_details" && showLookDetails) ||
+      (card === "occasion" && showOccasion) ||
+      (card === "preferences" && showPreferences);
+
+    collapseAllOptionCards();
+    if (isActive) return;
+
+    if (card === "look_plan") setShowLookPlan(true);
+    if (card === "photo_mode") setShowPhotoMode(true);
+    if (card === "look_details") setShowLookDetails(true);
+    if (card === "occasion") setShowOccasion(true);
+    if (card === "preferences") setShowPreferences(true);
+  };
 
   return (
     <Animated.View entering={FadeInDown.delay(135).duration(500)} style={styles.section}>
@@ -229,23 +260,27 @@ export default function StylistBuilderSection({
         onToggle={() => setShowStartCreating((prev) => !prev)}
         styles={styles}
       >
-        <Text style={styles.preferencesHint}>All options are available below in two columns.</Text>
+        <Text style={styles.preferencesHint}>All options are shown in two columns. Expand one to edit details.</Text>
         <View style={styles.preferenceSummaryRow}>
-          <PreferenceSummaryCard
+          <OptionCard
             title="Style advice"
             value={lookOutputLabel}
             active={showLookPlan}
             cardStyle={summaryCardStyle}
-            onPress={() => setShowLookPlan((prev) => !prev)}
+            onPress={() => toggleCard("look_plan")}
             styles={styles}
           >
-            <View style={styles.modeRow}>
+            <View style={[styles.modeRow, stackChoiceRows ? styles.modeRowStacked : undefined]}>
               <Pressable
                 onPress={() => {
                   setOutputMode("text");
                   setActionHint("");
                 }}
-                style={[styles.modeChip, outputMode === "text" ? styles.modeChipActive : undefined]}
+                style={[
+                  styles.modeChip,
+                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  outputMode === "text" ? styles.modeChipActive : undefined,
+                ]}
               >
                 <Text style={outputMode === "text" ? styles.modeChipTitleActive : styles.modeChipTitle}>
                   Style Advice
@@ -259,7 +294,11 @@ export default function StylistBuilderSection({
                   setOutputMode("image");
                   setActionHint("");
                 }}
-                style={[styles.modeChip, outputMode === "image" ? styles.modeChipActive : undefined]}
+                style={[
+                  styles.modeChip,
+                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  outputMode === "image" ? styles.modeChipActive : undefined,
+                ]}
               >
                 <Text style={outputMode === "image" ? styles.modeChipTitleActive : styles.modeChipTitle}>
                   Look Preview Image
@@ -269,21 +308,25 @@ export default function StylistBuilderSection({
                 </Text>
               </Pressable>
             </View>
-          </PreferenceSummaryCard>
+          </OptionCard>
 
-          <PreferenceSummaryCard
+          <OptionCard
             title="Photo setup"
             value={imageModeLabel}
             active={showPhotoMode}
             cardStyle={summaryCardStyle}
-            onPress={() => setShowPhotoMode((prev) => !prev)}
+            onPress={() => toggleCard("photo_mode")}
             styles={styles}
           >
             <Text style={styles.inlineHelperText}>Only needed if you upload photos.</Text>
-            <View style={styles.modeRow}>
+            <View style={[styles.modeRow, stackChoiceRows ? styles.modeRowStacked : undefined]}>
               <Pressable
                 onPress={() => updateImageInputMode("single_item")}
-                style={[styles.modeChip, imageInputMode === "single_item" ? styles.modeChipActive : undefined]}
+                style={[
+                  styles.modeChip,
+                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  imageInputMode === "single_item" ? styles.modeChipActive : undefined,
+                ]}
               >
                 <Text style={imageInputMode === "single_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
                   One Item / Photo
@@ -294,7 +337,11 @@ export default function StylistBuilderSection({
               </Pressable>
               <Pressable
                 onPress={() => updateImageInputMode("multi_item")}
-                style={[styles.modeChip, imageInputMode === "multi_item" ? styles.modeChipActive : undefined]}
+                style={[
+                  styles.modeChip,
+                  stackChoiceRows ? styles.modeChipStacked : undefined,
+                  imageInputMode === "multi_item" ? styles.modeChipActive : undefined,
+                ]}
               >
                 <Text style={imageInputMode === "multi_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
                   Multiple Items / Photo
@@ -305,14 +352,14 @@ export default function StylistBuilderSection({
               </Pressable>
             </View>
             {!imageInputMode && <Text style={styles.inlineHelperText}>No selection needed for text-only styling.</Text>}
-          </PreferenceSummaryCard>
+          </OptionCard>
 
-          <PreferenceSummaryCard
+          <OptionCard
             title="Describe your look"
             value={lookDetailsLabel}
             active={showLookDetails}
             cardStyle={summaryCardStyle}
-            onPress={() => setShowLookDetails((prev) => !prev)}
+            onPress={() => toggleCard("look_details")}
             styles={styles}
           >
             <View style={styles.extraInputs}>
@@ -337,14 +384,14 @@ export default function StylistBuilderSection({
                 placeholderTextColor={Colors.textMuted}
               />
             </View>
-          </PreferenceSummaryCard>
+          </OptionCard>
 
-          <PreferenceSummaryCard
+          <OptionCard
             title="Occasion"
             value={resolvedOccasionLabel}
             active={showOccasion}
             cardStyle={summaryCardStyle}
-            onPress={() => setShowOccasion((prev) => !prev)}
+            onPress={() => toggleCard("occasion")}
             styles={styles}
           >
             <View style={styles.occasionGrid}>
@@ -375,14 +422,14 @@ export default function StylistBuilderSection({
                 placeholderTextColor={Colors.textMuted}
               />
             )}
-          </PreferenceSummaryCard>
+          </OptionCard>
 
-          <PreferenceSummaryCard
+          <OptionCard
             title="Style preferences"
             value={stylePreferencesLabel}
             active={showPreferences}
             cardStyle={summaryCardStyle}
-            onPress={() => setShowPreferences((prev) => !prev)}
+            onPress={() => toggleCard("preferences")}
             styles={styles}
           >
             <Text style={styles.preferencesHint}>These choices apply to both text requests and photo requests.</Text>
@@ -516,7 +563,7 @@ export default function StylistBuilderSection({
                 )}
               </>
             )}
-          </PreferenceSummaryCard>
+          </OptionCard>
         </View>
       </CollapsibleSection>
     </Animated.View>
