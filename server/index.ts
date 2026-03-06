@@ -280,7 +280,7 @@ function configureExpoAndLanding(app: express.Application) {
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
 
   if (hasWebBuild) {
-    app.get("*", (req, res, next) => {
+    app.use((req, res, next) => {
       if (req.path.startsWith("/api") || req.path === "/manifest") {
         return next();
       }
