@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, type ReactNode } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { useCredits } from "@/contexts/CreditsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
 import { router } from "expo-router";
+import StylistBuilderSection from "./components/StylistBuilderSection";
 
 const OCCASIONS = [
   "Casual Day Out",
@@ -202,78 +203,6 @@ function SelectableClothingItem({
   );
 }
 
-function CollapsibleSection({
-  title,
-  subtitle,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  open: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <View style={styles.dropdownCard}>
-      <Pressable onPress={onToggle} style={styles.dropdownHeader}>
-        <View style={styles.dropdownHeaderTextWrap}>
-          <Text style={styles.dropdownTitle}>{title}</Text>
-          {subtitle ? <Text style={styles.dropdownSubtitle}>{subtitle}</Text> : null}
-        </View>
-        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={Colors.textSecondary} />
-      </Pressable>
-      {open && <View style={styles.dropdownContent}>{children}</View>}
-    </View>
-  );
-}
-
-function PreferenceSummaryCard({
-  title,
-  value,
-  active,
-  cardStyle,
-  onPress,
-}: {
-  title: string;
-  value: string;
-  active?: boolean;
-  cardStyle?: ViewStyle;
-  onPress: () => void;
-}) {
-  const hasValue = value.trim().length > 0 && value.trim().toLowerCase() !== "optional";
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.preferenceSummaryCard,
-        cardStyle,
-        active ? styles.preferenceSummaryCardActive : undefined,
-        pressed ? { opacity: 0.82 } : undefined,
-      ]}
-    >
-      <View style={styles.preferenceSummaryHeaderRow}>
-        <Text style={styles.preferenceSummaryTitle}>{title}</Text>
-        <Ionicons
-          name={active ? "chevron-up" : "chevron-down"}
-          size={18}
-          color={hasValue || active ? Colors.accent : Colors.textSecondary}
-        />
-      </View>
-      <Text
-        numberOfLines={2}
-        style={[
-          styles.preferenceSummaryValue,
-          hasValue || active ? styles.preferenceSummaryValueAccent : styles.preferenceSummaryValueMuted,
-        ]}
-      >
-        {value || "Optional"}
-      </Text>
-    </Pressable>
-  );
-}
-
 export default function StylistScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -353,10 +282,6 @@ export default function StylistScreen() {
   const lookOutputLabel = outputMode === "image" ? "Styled outfit image" : "Style advice in text";
   const lookDetailsLabel = hasCustomLookDetails ? "Custom details added" : "Optional";
   const stylePreferencesLabel = hasStylePreferences ? "Custom preferences selected" : "Optional";
-  const summaryCardStyle =
-    screenWidth >= 340 ? styles.preferenceSummaryCardHalf : styles.preferenceSummaryCardFull;
-  const hasOpenBuilderPanel =
-    showLookPlan || showPhotoMode || showLookDetails || showOccasion || showPreferences;
   const resolvedStyleGender = styleGender || user?.styleGender || "";
   const saveDisabled = !pendingOutfitSave || isCurrentLookSaved;
 
@@ -1017,343 +942,67 @@ export default function StylistScreen() {
           )}
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(135).duration(500)} style={styles.section}>
-          <CollapsibleSection
-            title="Builder steps"
-            subtitle="Tap an option to expand"
-            open={showStartCreating}
-            onToggle={() => setShowStartCreating((prev) => !prev)}
-          >
-            <Text style={styles.preferencesHint}>Tap any card below to configure that section quickly.</Text>
-            <View style={styles.preferenceSummaryRow}>
-              <PreferenceSummaryCard
-                title="Style advice"
-                value={lookOutputLabel}
-                active={showLookPlan}
-                cardStyle={summaryCardStyle}
-                onPress={() => setShowLookPlan((prev) => !prev)}
-              />
-              <PreferenceSummaryCard
-                title="Photo setup"
-                value={imageModeLabel}
-                active={showPhotoMode}
-                cardStyle={summaryCardStyle}
-                onPress={() => setShowPhotoMode((prev) => !prev)}
-              />
-              <PreferenceSummaryCard
-                title="Describe your look"
-                value={lookDetailsLabel}
-                active={showLookDetails}
-                cardStyle={summaryCardStyle}
-                onPress={() => setShowLookDetails((prev) => !prev)}
-              />
-              <PreferenceSummaryCard
-                title="Occasion"
-                value={resolvedOccasionLabel}
-                active={showOccasion}
-                cardStyle={summaryCardStyle}
-                onPress={() => setShowOccasion((prev) => !prev)}
-              />
-              <PreferenceSummaryCard
-                title="Style preferences"
-                value={stylePreferencesLabel}
-                active={showPreferences}
-                cardStyle={summaryCardStyle}
-                onPress={() => setShowPreferences((prev) => !prev)}
-              />
-            </View>
-
-            {hasOpenBuilderPanel && (
-              <View style={styles.builderPanels}>
-                {showLookPlan && (
-                  <View style={styles.builderPanel}>
-                    <Text style={styles.builderPanelTitle}>Style advice</Text>
-                    <Text style={styles.builderPanelSubtitle}>Choose what type of styling output you want.</Text>
-                    <View style={styles.modeRow}>
-                      <Pressable
-                        onPress={() => {
-                          setOutputMode("text");
-                          setActionHint("");
-                        }}
-                        style={[styles.modeChip, outputMode === "text" ? styles.modeChipActive : undefined]}
-                      >
-                        <Text style={outputMode === "text" ? styles.modeChipTitleActive : styles.modeChipTitle}>
-                          Style Advice
-                        </Text>
-                        <Text style={outputMode === "text" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}>
-                          {STYLE_COSTS.text} credits
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => {
-                          setOutputMode("image");
-                          setActionHint("");
-                        }}
-                        style={[styles.modeChip, outputMode === "image" ? styles.modeChipActive : undefined]}
-                      >
-                        <Text style={outputMode === "image" ? styles.modeChipTitleActive : styles.modeChipTitle}>
-                          Look Preview Image
-                        </Text>
-                        <Text style={outputMode === "image" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}>
-                          {STYLE_COSTS.image} credits
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                )}
-
-                {showPhotoMode && (
-                  <View style={styles.builderPanel}>
-                    <Text style={styles.builderPanelTitle}>Photo setup (optional)</Text>
-                    <Text style={styles.builderPanelSubtitle}>Only needed if you upload photos.</Text>
-                    <View style={styles.modeRow}>
-                      <Pressable
-                        onPress={() => updateImageInputMode("single_item")}
-                        style={[styles.modeChip, imageInputMode === "single_item" ? styles.modeChipActive : undefined]}
-                      >
-                        <Text style={imageInputMode === "single_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
-                          One Item / Photo
-                        </Text>
-                        <Text
-                          style={
-                            imageInputMode === "single_item" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle
-                          }
-                        >
-                          Up to {MAX_PHOTOS_BY_MODE.single_item} photos
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => updateImageInputMode("multi_item")}
-                        style={[styles.modeChip, imageInputMode === "multi_item" ? styles.modeChipActive : undefined]}
-                      >
-                        <Text style={imageInputMode === "multi_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
-                          Multiple Items / Photo
-                        </Text>
-                        <Text
-                          style={imageInputMode === "multi_item" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}
-                        >
-                          Up to {MAX_PHOTOS_BY_MODE.multi_item} photos
-                        </Text>
-                      </Pressable>
-                    </View>
-                    {!imageInputMode && (
-                      <Text style={styles.inlineHelperText}>No selection needed for text-only styling.</Text>
-                    )}
-                  </View>
-                )}
-
-                {showLookDetails && (
-                  <View style={styles.builderPanel}>
-                    <Text style={styles.builderPanelTitle}>Describe your look</Text>
-                    <Text style={styles.builderPanelSubtitle}>Add optional details to guide the final result.</Text>
-                    <View style={styles.extraInputs}>
-                      <TextInput
-                        style={styles.compactInput}
-                        value={eventDetails}
-                        onChangeText={(value) => {
-                          setEventDetails(value);
-                          setActionHint("");
-                        }}
-                        placeholder="Where are you going? (optional)"
-                        placeholderTextColor={Colors.textMuted}
-                      />
-                      <TextInput
-                        style={styles.compactInput}
-                        value={requiredPiecesText}
-                        onChangeText={(value) => {
-                          setRequiredPiecesText(value);
-                          setActionHint("");
-                        }}
-                        placeholder="Must-have pieces (comma separated)"
-                        placeholderTextColor={Colors.textMuted}
-                      />
-                    </View>
-                  </View>
-                )}
-
-                {showOccasion && (
-                  <View style={styles.builderPanel}>
-                    <Text style={styles.builderPanelTitle}>Occasion</Text>
-                    <Text style={styles.builderPanelSubtitle}>Choose where you are wearing this outfit.</Text>
-                    <View style={styles.occasionGrid}>
-                      {OCCASIONS.map((o: string) => (
-                        <Pressable
-                          key={o}
-                          onPress={() => {
-                            setOccasion(occasion === o ? "" : o);
-                            if (o !== "Other") setOccasionOther("");
-                            setActionHint("");
-                            Haptics.selectionAsync();
-                          }}
-                          style={[styles.occasionChip, occasion === o ? styles.occasionChipActive : undefined]}
-                        >
-                          <Text style={occasion === o ? styles.occasionTextActive : styles.occasionText}>{o}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    {occasion === "Other" && (
-                      <TextInput
-                        style={[styles.compactInput, styles.otherInput]}
-                        value={occasionOther}
-                        onChangeText={(value) => {
-                          setOccasionOther(value);
-                          setActionHint("");
-                        }}
-                        placeholder="Write your occasion"
-                        placeholderTextColor={Colors.textMuted}
-                      />
-                    )}
-                  </View>
-                )}
-
-                {showPreferences && (
-                  <View style={styles.builderPanel}>
-                    <Text style={styles.builderPanelTitle}>Style preferences</Text>
-                    <Text style={styles.builderPanelSubtitle}>
-                      These choices apply to both text requests and photo requests.
-                    </Text>
-
-                    <Text style={styles.preferenceLabel}>Who is this look for?</Text>
-                    <View style={styles.occasionGrid}>
-                      {GENDER_OPTIONS.map((option) => (
-                        <Pressable
-                          key={option.value}
-                          onPress={() => {
-                            const nextGender = styleGender === option.value ? "" : option.value;
-                            selectStyleGender(nextGender);
-                          }}
-                          style={[styles.occasionChip, styleGender === option.value ? styles.occasionChipActive : undefined]}
-                        >
-                          <Text style={styleGender === option.value ? styles.occasionTextActive : styles.occasionText}>
-                            {option.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <Text style={styles.inlineHelperText}>
-                      Optional. Helps tailor proportions and styling references.
-                    </Text>
-
-                    <Pressable style={styles.preferenceToggle} onPress={() => setShowSeason((prev) => !prev)}>
-                      <Text style={styles.preferenceToggleText}>Season</Text>
-                      <Ionicons name={showSeason ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
-                    </Pressable>
-                    {showSeason && (
-                      <>
-                        <View style={styles.occasionGrid}>
-                          {SEASON_OPTIONS.map((option) => (
-                            <Pressable
-                              key={option}
-                              onPress={() => {
-                                setSeason(season === option ? "" : option);
-                                if (option !== "Other") setSeasonOther("");
-                                setActionHint("");
-                                Haptics.selectionAsync();
-                              }}
-                              style={[styles.occasionChip, season === option ? styles.occasionChipActive : undefined]}
-                            >
-                              <Text style={season === option ? styles.occasionTextActive : styles.occasionText}>{option}</Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                        {season === "Other" && (
-                          <TextInput
-                            style={[styles.compactInput, styles.otherInput]}
-                            value={seasonOther}
-                            onChangeText={(value) => {
-                              setSeasonOther(value);
-                              setActionHint("");
-                            }}
-                            placeholder="Write your season preference"
-                            placeholderTextColor={Colors.textMuted}
-                          />
-                        )}
-                      </>
-                    )}
-
-                    <Pressable style={styles.preferenceToggle} onPress={() => setShowAesthetic((prev) => !prev)}>
-                      <Text style={styles.preferenceToggleText}>Aesthetic</Text>
-                      <Ionicons name={showAesthetic ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
-                    </Pressable>
-                    {showAesthetic && (
-                      <>
-                        <View style={styles.occasionGrid}>
-                          {AESTHETIC_OPTIONS.map((option) => (
-                            <Pressable
-                              key={option}
-                              onPress={() => {
-                                setAesthetic(aesthetic === option ? "" : option);
-                                if (option !== "Other") setAestheticOther("");
-                                setActionHint("");
-                                Haptics.selectionAsync();
-                              }}
-                              style={[styles.occasionChip, aesthetic === option ? styles.occasionChipActive : undefined]}
-                            >
-                              <Text style={aesthetic === option ? styles.occasionTextActive : styles.occasionText}>
-                                {option}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                        {aesthetic === "Other" && (
-                          <TextInput
-                            style={[styles.compactInput, styles.otherInput]}
-                            value={aestheticOther}
-                            onChangeText={(value) => {
-                              setAestheticOther(value);
-                              setActionHint("");
-                            }}
-                            placeholder="Write your aesthetic"
-                            placeholderTextColor={Colors.textMuted}
-                          />
-                        )}
-                      </>
-                    )}
-
-                    <Pressable style={styles.preferenceToggle} onPress={() => setShowPalette((prev) => !prev)}>
-                      <Text style={styles.preferenceToggleText}>Color palette</Text>
-                      <Ionicons name={showPalette ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
-                    </Pressable>
-                    {showPalette && (
-                      <>
-                        <View style={styles.occasionGrid}>
-                          {PALETTE_OPTIONS.map((option) => (
-                            <Pressable
-                              key={option}
-                              onPress={() => {
-                                setColorPalette(colorPalette === option ? "" : option);
-                                if (option !== "Other") setColorPaletteOther("");
-                                setActionHint("");
-                                Haptics.selectionAsync();
-                              }}
-                              style={[styles.occasionChip, colorPalette === option ? styles.occasionChipActive : undefined]}
-                            >
-                              <Text style={colorPalette === option ? styles.occasionTextActive : styles.occasionText}>
-                                {option}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                        {colorPalette === "Other" && (
-                          <TextInput
-                            style={[styles.compactInput, styles.otherInput]}
-                            value={colorPaletteOther}
-                            onChangeText={(value) => {
-                              setColorPaletteOther(value);
-                              setActionHint("");
-                            }}
-                            placeholder="Write your color palette"
-                            placeholderTextColor={Colors.textMuted}
-                          />
-                        )}
-                      </>
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
-          </CollapsibleSection>
-        </Animated.View>
+        <StylistBuilderSection
+          styles={styles}
+          screenWidth={screenWidth}
+          outputMode={outputMode}
+          setOutputMode={setOutputMode}
+          styleCosts={STYLE_COSTS}
+          imageInputMode={imageInputMode}
+          updateImageInputMode={updateImageInputMode}
+          maxPhotosByMode={MAX_PHOTOS_BY_MODE}
+          eventDetails={eventDetails}
+          setEventDetails={setEventDetails}
+          requiredPiecesText={requiredPiecesText}
+          setRequiredPiecesText={setRequiredPiecesText}
+          occasion={occasion}
+          setOccasion={setOccasion}
+          occasionOther={occasionOther}
+          setOccasionOther={setOccasionOther}
+          season={season}
+          setSeason={setSeason}
+          seasonOther={seasonOther}
+          setSeasonOther={setSeasonOther}
+          aesthetic={aesthetic}
+          setAesthetic={setAesthetic}
+          aestheticOther={aestheticOther}
+          setAestheticOther={setAestheticOther}
+          colorPalette={colorPalette}
+          setColorPalette={setColorPalette}
+          colorPaletteOther={colorPaletteOther}
+          setColorPaletteOther={setColorPaletteOther}
+          styleGender={styleGender}
+          selectStyleGender={selectStyleGender}
+          showStartCreating={showStartCreating}
+          setShowStartCreating={setShowStartCreating}
+          showLookPlan={showLookPlan}
+          setShowLookPlan={setShowLookPlan}
+          showPhotoMode={showPhotoMode}
+          setShowPhotoMode={setShowPhotoMode}
+          showLookDetails={showLookDetails}
+          setShowLookDetails={setShowLookDetails}
+          showOccasion={showOccasion}
+          setShowOccasion={setShowOccasion}
+          showPreferences={showPreferences}
+          setShowPreferences={setShowPreferences}
+          showSeason={showSeason}
+          setShowSeason={setShowSeason}
+          showAesthetic={showAesthetic}
+          setShowAesthetic={setShowAesthetic}
+          showPalette={showPalette}
+          setShowPalette={setShowPalette}
+          lookOutputLabel={lookOutputLabel}
+          imageModeLabel={imageModeLabel}
+          lookDetailsLabel={lookDetailsLabel}
+          resolvedOccasionLabel={resolvedOccasionLabel}
+          stylePreferencesLabel={stylePreferencesLabel}
+          setActionHint={setActionHint}
+          occasionOptions={OCCASIONS}
+          seasonOptions={SEASON_OPTIONS}
+          aestheticOptions={AESTHETIC_OPTIONS}
+          paletteOptions={PALETTE_OPTIONS}
+          genderOptions={GENDER_OPTIONS}
+        />
 
         {items.length > 0 && (
           <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.section}>
@@ -1372,193 +1021,6 @@ export default function StylistScreen() {
             </ScrollView>
           </Animated.View>
         )}
-
-        <Animated.View entering={FadeInDown.delay(350).duration(500)} style={styles.section}>
-          <CollapsibleSection
-            title="Occasion"
-            subtitle={resolvedOccasionLabel}
-            open={showOccasion}
-            onToggle={() => setShowOccasion((prev) => !prev)}
-          >
-            <View style={styles.occasionGrid}>
-              {OCCASIONS.map((o: string) => (
-                <Pressable
-                  key={o}
-                  onPress={() => {
-                    setOccasion(occasion === o ? "" : o);
-                    if (o !== "Other") setOccasionOther("");
-                    setActionHint("");
-                    Haptics.selectionAsync();
-                  }}
-                  style={[styles.occasionChip, occasion === o ? styles.occasionChipActive : undefined]}
-                >
-                  <Text style={occasion === o ? styles.occasionTextActive : styles.occasionText}>{o}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {occasion === "Other" && (
-              <TextInput
-                style={[styles.compactInput, styles.otherInput]}
-                value={occasionOther}
-                onChangeText={(value) => {
-                  setOccasionOther(value);
-                  setActionHint("");
-                }}
-                placeholder="Write your occasion"
-                placeholderTextColor={Colors.textMuted}
-              />
-            )}
-          </CollapsibleSection>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(380).duration(500)} style={styles.section}>
-          <CollapsibleSection
-            title="Style preferences"
-            subtitle={hasStylePreferences ? "Custom style preferences selected" : "Optional"}
-            open={showPreferences}
-            onToggle={() => setShowPreferences((prev) => !prev)}
-          >
-            <Text style={styles.preferencesHint}>
-              These choices apply to both text requests and photo requests.
-            </Text>
-
-            <Text style={styles.preferenceLabel}>Who is this look for?</Text>
-            <View style={styles.occasionGrid}>
-              {GENDER_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.value}
-                  onPress={() => {
-                    const nextGender = styleGender === option.value ? "" : option.value;
-                    selectStyleGender(nextGender);
-                  }}
-                  style={[styles.occasionChip, styleGender === option.value ? styles.occasionChipActive : undefined]}
-                >
-                  <Text style={styleGender === option.value ? styles.occasionTextActive : styles.occasionText}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.inlineHelperText}>
-              Optional. Helps tailor proportions and styling references.
-            </Text>
-
-            <Pressable style={styles.preferenceToggle} onPress={() => setShowSeason((prev) => !prev)}>
-              <Text style={styles.preferenceToggleText}>Season</Text>
-              <Ionicons name={showSeason ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
-            </Pressable>
-            {showSeason && (
-              <>
-                <View style={styles.occasionGrid}>
-                  {SEASON_OPTIONS.map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => {
-                        setSeason(season === option ? "" : option);
-                        if (option !== "Other") setSeasonOther("");
-                        setActionHint("");
-                        Haptics.selectionAsync();
-                      }}
-                      style={[styles.occasionChip, season === option ? styles.occasionChipActive : undefined]}
-                    >
-                      <Text style={season === option ? styles.occasionTextActive : styles.occasionText}>{option}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {season === "Other" && (
-                  <TextInput
-                    style={[styles.compactInput, styles.otherInput]}
-                    value={seasonOther}
-                    onChangeText={(value) => {
-                      setSeasonOther(value);
-                      setActionHint("");
-                    }}
-                    placeholder="Write your season preference"
-                    placeholderTextColor={Colors.textMuted}
-                  />
-                )}
-              </>
-            )}
-
-            <Pressable style={styles.preferenceToggle} onPress={() => setShowAesthetic((prev) => !prev)}>
-              <Text style={styles.preferenceToggleText}>Aesthetic</Text>
-              <Ionicons name={showAesthetic ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
-            </Pressable>
-            {showAesthetic && (
-              <>
-                <View style={styles.occasionGrid}>
-                  {AESTHETIC_OPTIONS.map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => {
-                        setAesthetic(aesthetic === option ? "" : option);
-                        if (option !== "Other") setAestheticOther("");
-                        setActionHint("");
-                        Haptics.selectionAsync();
-                      }}
-                      style={[styles.occasionChip, aesthetic === option ? styles.occasionChipActive : undefined]}
-                    >
-                      <Text style={aesthetic === option ? styles.occasionTextActive : styles.occasionText}>
-                        {option}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {aesthetic === "Other" && (
-                  <TextInput
-                    style={[styles.compactInput, styles.otherInput]}
-                    value={aestheticOther}
-                    onChangeText={(value) => {
-                      setAestheticOther(value);
-                      setActionHint("");
-                    }}
-                    placeholder="Write your aesthetic"
-                    placeholderTextColor={Colors.textMuted}
-                  />
-                )}
-              </>
-            )}
-
-            <Pressable style={styles.preferenceToggle} onPress={() => setShowPalette((prev) => !prev)}>
-              <Text style={styles.preferenceToggleText}>Color palette</Text>
-              <Ionicons name={showPalette ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
-            </Pressable>
-            {showPalette && (
-              <>
-                <View style={styles.occasionGrid}>
-                  {PALETTE_OPTIONS.map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => {
-                        setColorPalette(colorPalette === option ? "" : option);
-                        if (option !== "Other") setColorPaletteOther("");
-                        setActionHint("");
-                        Haptics.selectionAsync();
-                      }}
-                      style={[styles.occasionChip, colorPalette === option ? styles.occasionChipActive : undefined]}
-                    >
-                      <Text style={colorPalette === option ? styles.occasionTextActive : styles.occasionText}>
-                        {option}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {colorPalette === "Other" && (
-                  <TextInput
-                    style={[styles.compactInput, styles.otherInput]}
-                    value={colorPaletteOther}
-                    onChangeText={(value) => {
-                      setColorPaletteOther(value);
-                      setActionHint("");
-                    }}
-                    placeholder="Write your color palette"
-                    placeholderTextColor={Colors.textMuted}
-                  />
-                )}
-              </>
-            )}
-          </CollapsibleSection>
-        </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.section}>
           <Pressable
@@ -1803,29 +1265,6 @@ const styles = StyleSheet.create({
   },
   preferenceSummaryValueMuted: {
     color: Colors.textSecondary,
-  },
-  builderPanels: {
-    marginTop: 2,
-    gap: 10,
-  },
-  builderPanel: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    backgroundColor: "#101010",
-    padding: 12,
-    gap: 10,
-  },
-  builderPanelTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
-    color: Colors.white,
-  },
-  builderPanelSubtitle: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 18,
   },
   sectionTitle: {
     fontFamily: "Inter_600SemiBold",
