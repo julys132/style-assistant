@@ -4,6 +4,12 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import Colors from "@/constants/colors";
+import { ColorPaletteSelector } from "@/components/ColorPaletteSelector";
+import { AestheticSelector } from "@/components/AestheticSelector";
+import {
+  ColorStructure,
+  PALETTE_OPTIONS,
+} from "@/constants/colorPalettes";
 
 type OutputMode = "text" | "image";
 type ImageInputMode = "single_item" | "multi_item";
@@ -41,10 +47,10 @@ type StylistOptionsSectionProps = {
   setAesthetic: Dispatch<SetStateAction<string>>;
   aestheticOther: string;
   setAestheticOther: Dispatch<SetStateAction<string>>;
-  colorPalette: string;
-  setColorPalette: Dispatch<SetStateAction<string>>;
-  colorPaletteOther: string;
-  setColorPaletteOther: Dispatch<SetStateAction<string>>;
+  colorStructure: ColorStructure;
+  setColorStructure: Dispatch<SetStateAction<ColorStructure>>;
+  selectedPaletteId: string | null;
+  setSelectedPaletteId: Dispatch<SetStateAction<string | null>>;
   styleGender: StyleGender;
   selectStyleGender: (nextGender: StyleGender) => void;
   showStartCreating: boolean;
@@ -73,8 +79,6 @@ type StylistOptionsSectionProps = {
   setActionHint: Dispatch<SetStateAction<string>>;
   occasionOptions: readonly string[];
   seasonOptions: readonly string[];
-  aestheticOptions: readonly string[];
-  paletteOptions: readonly string[];
   genderOptions: readonly GenderOption[];
 };
 
@@ -184,10 +188,10 @@ export default function StylistOptionsSection({
   setAesthetic,
   aestheticOther,
   setAestheticOther,
-  colorPalette,
-  setColorPalette,
-  colorPaletteOther,
-  setColorPaletteOther,
+  colorStructure,
+  setColorStructure,
+  selectedPaletteId,
+  setSelectedPaletteId,
   styleGender,
   selectStyleGender,
   showStartCreating,
@@ -216,8 +220,6 @@ export default function StylistOptionsSection({
   setActionHint,
   occasionOptions,
   seasonOptions,
-  aestheticOptions,
-  paletteOptions,
   genderOptions,
 }: StylistOptionsSectionProps) {
   const summaryCardStyle =
@@ -504,36 +506,22 @@ export default function StylistOptionsSection({
               <Ionicons name={showAesthetic ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
             </Pressable>
             {showAesthetic && (
-              <>
-                <View style={styles.occasionGrid}>
-                  {aestheticOptions.map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => {
-                        setAesthetic(aesthetic === option ? "" : option);
-                        if (option !== "Other") setAestheticOther("");
-                        setActionHint("");
-                        Haptics.selectionAsync();
-                      }}
-                      style={[styles.occasionChip, aesthetic === option ? styles.occasionChipActive : undefined]}
-                    >
-                      <Text style={aesthetic === option ? styles.occasionTextActive : styles.occasionText}>{option}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {aesthetic === "Other" && (
-                  <TextInput
-                    style={[styles.compactInput, styles.otherInput]}
-                    value={aestheticOther}
-                    onChangeText={(value) => {
-                      setAestheticOther(value);
-                      setActionHint("");
-                    }}
-                    placeholder="Write your aesthetic"
-                    placeholderTextColor={Colors.textMuted}
-                  />
-                )}
-              </>
+              <AestheticSelector
+                selectedAesthetic={aesthetic}
+                aestheticOther={aestheticOther}
+                onChangeAesthetic={(value) => {
+                  setAesthetic(value);
+                  if (value !== "other") {
+                    setAestheticOther("");
+                  }
+                  setActionHint("");
+                  Haptics.selectionAsync();
+                }}
+                onChangeAestheticOther={(value) => {
+                  setAestheticOther(value);
+                  setActionHint("");
+                }}
+              />
             )}
 
             <Pressable style={styles.preferenceToggle} onPress={() => setShowPalette((prev) => !prev)}>
@@ -541,36 +529,32 @@ export default function StylistOptionsSection({
               <Ionicons name={showPalette ? "chevron-up" : "chevron-down"} size={16} color={Colors.textSecondary} />
             </Pressable>
             {showPalette && (
-              <>
-                <View style={styles.occasionGrid}>
-                  {paletteOptions.map((option) => (
-                    <Pressable
-                      key={option}
-                      onPress={() => {
-                        setColorPalette(colorPalette === option ? "" : option);
-                        if (option !== "Other") setColorPaletteOther("");
-                        setActionHint("");
-                        Haptics.selectionAsync();
-                      }}
-                      style={[styles.occasionChip, colorPalette === option ? styles.occasionChipActive : undefined]}
-                    >
-                      <Text style={colorPalette === option ? styles.occasionTextActive : styles.occasionText}>{option}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {colorPalette === "Other" && (
-                  <TextInput
-                    style={[styles.compactInput, styles.otherInput]}
-                    value={colorPaletteOther}
-                    onChangeText={(value) => {
-                      setColorPaletteOther(value);
-                      setActionHint("");
-                    }}
-                    placeholder="Write your color palette"
-                    placeholderTextColor={Colors.textMuted}
-                  />
-                )}
-              </>
+              <ColorPaletteSelector
+                selectedStructure={colorStructure}
+                selectedPaletteId={selectedPaletteId}
+                onChangeStructure={(value) => {
+                  setColorStructure(value);
+                  setActionHint("");
+                  if (value === "any") {
+                    setSelectedPaletteId(null);
+                    return;
+                  }
+                  if (
+                    selectedPaletteId &&
+                    !PALETTE_OPTIONS.some(
+                      (palette) => palette.id === selectedPaletteId && palette.structure === value,
+                    )
+                  ) {
+                    setSelectedPaletteId(null);
+                  }
+                  Haptics.selectionAsync();
+                }}
+                onChangePalette={(paletteId) => {
+                  setSelectedPaletteId(paletteId);
+                  setActionHint("");
+                  Haptics.selectionAsync();
+                }}
+              />
             )}
           </OptionCard>
         </View>

@@ -34,6 +34,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
 import { router } from "expo-router";
 import StylistOptionsSection from "@/components/stylist/StylistOptionsSection";
+import {
+  COLOR_STRUCTURES,
+  ColorStructure,
+  PALETTE_OPTIONS,
+} from "@/constants/colorPalettes";
+import { AESTHETIC_OPTIONS } from "@/constants/aesthetics";
 
 const OCCASIONS = [
   "Casual Day Out",
@@ -48,24 +54,6 @@ const OCCASIONS = [
 ];
 
 const SEASON_OPTIONS = ["Spring", "Summer", "Autumn", "Winter", "Other"];
-const AESTHETIC_OPTIONS = [
-  "Old Money",
-  "Minimalist",
-  "Streetwear",
-  "Classic",
-  "Boho",
-  "Sporty",
-  "Other",
-];
-const PALETTE_OPTIONS = [
-  "Neutral Tones",
-  "Monochrome",
-  "Earthy",
-  "Pastel",
-  "Bold & Vibrant",
-  "Black & White",
-  "Other",
-];
 const GENDER_OPTIONS = [
   { label: "Woman", value: "female" },
   { label: "Man", value: "male" },
@@ -222,8 +210,8 @@ export default function StylistScreen() {
   const [seasonOther, setSeasonOther] = useState("");
   const [aesthetic, setAesthetic] = useState("");
   const [aestheticOther, setAestheticOther] = useState("");
-  const [colorPalette, setColorPalette] = useState("");
-  const [colorPaletteOther, setColorPaletteOther] = useState("");
+  const [colorStructure, setColorStructure] = useState<ColorStructure>("any");
+  const [selectedPaletteId, setSelectedPaletteId] = useState<string | null>(null);
   const [styleGender, setStyleGender] = useState<StyleGender>("");
   const [requiredPiecesText, setRequiredPiecesText] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
@@ -300,8 +288,26 @@ export default function StylistScreen() {
   const resolvedOccasionLabel =
     occasion === "Other" ? occasionOther.trim() || "Custom occasion" : occasion || "Optional";
   const resolvedSeasonLabel = season === "Other" ? seasonOther.trim() : season;
-  const resolvedAestheticLabel = aesthetic === "Other" ? aestheticOther.trim() : aesthetic;
-  const resolvedPaletteLabel = colorPalette === "Other" ? colorPaletteOther.trim() : colorPalette;
+  const selectedAesthetic = AESTHETIC_OPTIONS.find((item) => item.id === aesthetic) || null;
+  const resolvedAesthetic =
+    aesthetic === "other"
+      ? aestheticOther.trim()
+      : selectedAesthetic?.label || "";
+  const resolvedAestheticLabel = resolvedAesthetic;
+  const selectedPalette =
+    PALETTE_OPTIONS.find((palette) => palette.id === selectedPaletteId) || null;
+  const selectedStructureLabel =
+    COLOR_STRUCTURES.find((structure) => structure.id === colorStructure)?.label || "";
+  const resolvedColorPalette =
+    colorStructure === "any"
+      ? ""
+      : selectedPalette
+        ? `${colorStructure}: ${selectedPalette.label}`
+        : colorStructure;
+  const resolvedPaletteLabel =
+    colorStructure === "any"
+      ? ""
+      : selectedPalette?.label || selectedStructureLabel;
   const hasCustomLookDetails = Boolean(
     eventDetails.trim() || requiredPiecesText.trim() || customPrompt.trim(),
   );
@@ -532,9 +538,6 @@ export default function StylistScreen() {
     const resolvedOccasion =
       occasion === "Other" ? (occasionOther.trim() || "Any occasion") : (occasion || "Any occasion");
     const resolvedSeason = season === "Other" ? seasonOther.trim() : season;
-    const resolvedAesthetic = aesthetic === "Other" ? aestheticOther.trim() : aesthetic;
-    const resolvedColorPalette =
-      colorPalette === "Other" ? colorPaletteOther.trim() : colorPalette;
     const resolvedImageInputMode: ImageInputMode = imageInputMode ?? "single_item";
 
     const requiredPieces = requiredPiecesText
@@ -680,10 +683,8 @@ export default function StylistScreen() {
     occasionOther,
     season,
     seasonOther,
-    aesthetic,
-    aestheticOther,
-    colorPalette,
-    colorPaletteOther,
+    resolvedAesthetic,
+    resolvedColorPalette,
     imageInputMode,
     isPhotoOnlyMode,
     allowExtraPieces,
@@ -731,9 +732,6 @@ export default function StylistScreen() {
     const resolvedOccasion =
       occasion === "Other" ? (occasionOther.trim() || "Any occasion") : (occasion || "Any occasion");
     const resolvedSeason = season === "Other" ? seasonOther.trim() : season;
-    const resolvedAesthetic = aesthetic === "Other" ? aestheticOther.trim() : aesthetic;
-    const resolvedColorPalette =
-      colorPalette === "Other" ? colorPaletteOther.trim() : colorPalette;
     const resolvedImageInputMode: ImageInputMode = imageInputMode ?? "single_item";
 
     if (isPhotoOnlyMode && uploadedPhotos.length === 0) {
@@ -872,10 +870,8 @@ export default function StylistScreen() {
     eventDetails,
     season,
     seasonOther,
-    aesthetic,
-    aestheticOther,
-    colorPalette,
-    colorPaletteOther,
+    resolvedAesthetic,
+    resolvedColorPalette,
     customPrompt,
     requiredPiecesText,
     occasionOther,
@@ -1149,10 +1145,10 @@ export default function StylistScreen() {
           setAesthetic={setAesthetic}
           aestheticOther={aestheticOther}
           setAestheticOther={setAestheticOther}
-          colorPalette={colorPalette}
-          setColorPalette={setColorPalette}
-          colorPaletteOther={colorPaletteOther}
-          setColorPaletteOther={setColorPaletteOther}
+          colorStructure={colorStructure}
+          setColorStructure={setColorStructure}
+          selectedPaletteId={selectedPaletteId}
+          setSelectedPaletteId={setSelectedPaletteId}
           styleGender={styleGender}
           selectStyleGender={selectStyleGender}
           showStartCreating={showStartCreating}
@@ -1181,8 +1177,6 @@ export default function StylistScreen() {
           setActionHint={setActionHint}
           occasionOptions={OCCASIONS}
           seasonOptions={SEASON_OPTIONS}
-          aestheticOptions={AESTHETIC_OPTIONS}
-          paletteOptions={PALETTE_OPTIONS}
           genderOptions={GENDER_OPTIONS}
         />
 
