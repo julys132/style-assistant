@@ -258,12 +258,12 @@ export default function StylistScreen() {
   const isSavedWardrobeMode = stylingSourceMode === "saved_wardrobe";
   const isSavedWardrobePlusMode = stylingSourceMode === "saved_wardrobe_plus";
   const allowExtraPieces = isSavedWardrobePlusMode;
-  const sourceModeLabel =
+  const sourceModeDescription =
     stylingSourceMode === "photo_only"
-      ? "Style from this photo"
+      ? "Uses only clothes visible in uploaded photo(s)."
       : stylingSourceMode === "saved_wardrobe"
-        ? "Style from my wardrobe"
-        : "Style from my wardrobe + add missing pieces";
+        ? "Uses only selected items from your wardrobe."
+        : "Starts from your wardrobe and adds only small finishing pieces when needed.";
   const styleButtonLabel =
     stylingSourceMode === "photo_only"
       ? outputMode === "text"
@@ -929,85 +929,70 @@ export default function StylistScreen() {
 
         <Animated.View entering={FadeInDown.delay(70).duration(500)} style={styles.section}>
           <Text style={styles.sectionTitle}>Choose styling mode</Text>
-          <View style={styles.modeRowStacked}>
-            <Pressable
-              onPress={() => {
-                setStylingSourceMode("photo_only");
-                setActionHint("");
-              }}
-              style={[
-                styles.modeChip,
-                styles.modeChipStacked,
-                stylingSourceMode === "photo_only" ? styles.modeChipActive : undefined,
-              ]}
-            >
-              <Text
-                style={stylingSourceMode === "photo_only" ? styles.modeChipTitleActive : styles.modeChipTitle}
+          <View style={styles.sourceModeSegmentWrap}>
+            <View style={styles.sourceModeSegmentRow}>
+              <Pressable
+                onPress={() => {
+                  setStylingSourceMode("photo_only");
+                  setActionHint("");
+                }}
+                style={[
+                  styles.sourceModeSegmentButton,
+                  stylingSourceMode === "photo_only" ? styles.sourceModeSegmentButtonActive : undefined,
+                ]}
               >
-                Style from this photo
-              </Text>
-              <Text
-                style={stylingSourceMode === "photo_only" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}
-              >
-                Uses only clothes visible in uploaded photo(s).
-              </Text>
-            </Pressable>
+                <Text
+                  style={[
+                    styles.sourceModeSegmentLabel,
+                    stylingSourceMode === "photo_only" ? styles.sourceModeSegmentLabelActive : undefined,
+                  ]}
+                >
+                  Photo
+                </Text>
+              </Pressable>
 
-            <Pressable
-              onPress={() => {
-                setStylingSourceMode("saved_wardrobe");
-                setActionHint("");
-              }}
-              style={[
-                styles.modeChip,
-                styles.modeChipStacked,
-                stylingSourceMode === "saved_wardrobe" ? styles.modeChipActive : undefined,
-              ]}
-            >
-              <Text
-                style={stylingSourceMode === "saved_wardrobe" ? styles.modeChipTitleActive : styles.modeChipTitle}
+              <Pressable
+                onPress={() => {
+                  setStylingSourceMode("saved_wardrobe");
+                  setActionHint("");
+                }}
+                style={[
+                  styles.sourceModeSegmentButton,
+                  stylingSourceMode === "saved_wardrobe" ? styles.sourceModeSegmentButtonActive : undefined,
+                ]}
               >
-                Style from my saved wardrobe
-              </Text>
-              <Text
-                style={stylingSourceMode === "saved_wardrobe" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}
-              >
-                Uses only selected items from your wardrobe.
-              </Text>
-            </Pressable>
+                <Text
+                  style={[
+                    styles.sourceModeSegmentLabel,
+                    stylingSourceMode === "saved_wardrobe" ? styles.sourceModeSegmentLabelActive : undefined,
+                  ]}
+                >
+                  Wardrobe
+                </Text>
+              </Pressable>
 
-            <Pressable
-              onPress={() => {
-                setStylingSourceMode("saved_wardrobe_plus");
-                setActionHint("");
-              }}
-              style={[
-                styles.modeChip,
-                styles.modeChipStacked,
-                stylingSourceMode === "saved_wardrobe_plus" ? styles.modeChipActive : undefined,
-              ]}
-            >
-              <Text
-                style={
-                  stylingSourceMode === "saved_wardrobe_plus"
-                    ? styles.modeChipTitleActive
-                    : styles.modeChipTitle
-                }
+              <Pressable
+                onPress={() => {
+                  setStylingSourceMode("saved_wardrobe_plus");
+                  setActionHint("");
+                }}
+                style={[
+                  styles.sourceModeSegmentButton,
+                  stylingSourceMode === "saved_wardrobe_plus" ? styles.sourceModeSegmentButtonActive : undefined,
+                ]}
               >
-                Style wardrobe + add missing pieces
-              </Text>
-              <Text
-                style={
-                  stylingSourceMode === "saved_wardrobe_plus"
-                    ? styles.modeChipSubtitleActive
-                    : styles.modeChipSubtitle
-                }
-              >
-                Starts from your wardrobe and adds at most a few finishing pieces.
-              </Text>
-            </Pressable>
+                <Text
+                  style={[
+                    styles.sourceModeSegmentLabel,
+                    stylingSourceMode === "saved_wardrobe_plus" ? styles.sourceModeSegmentLabelActive : undefined,
+                  ]}
+                >
+                  + Extras
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={styles.sourceModeSegmentHint}>{sourceModeDescription}</Text>
           </View>
-          <Text style={[styles.inlineHelperText, { marginTop: 10 }]}>Current mode: {sourceModeLabel}</Text>
         </Animated.View>
 
         {isPhotoOnlyMode ? (
@@ -1522,6 +1507,48 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.08)",
     padding: 12,
     gap: 10,
+  },
+  sourceModeSegmentWrap: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    backgroundColor: "#101010",
+    padding: 8,
+    gap: 8,
+  },
+  sourceModeSegmentRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sourceModeSegmentButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    backgroundColor: Colors.surfaceLight,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  sourceModeSegmentButtonActive: {
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(201, 169, 110, 0.18)",
+  },
+  sourceModeSegmentLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  sourceModeSegmentLabelActive: {
+    color: Colors.accent,
+  },
+  sourceModeSegmentHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+    color: Colors.textSecondary,
+    paddingHorizontal: 2,
   },
   modeRow: { flexDirection: "row", gap: 10 },
   modeRowStacked: { flexDirection: "column", gap: 8 },
