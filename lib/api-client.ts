@@ -7,6 +7,8 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: "@stylist_refresh_token",
 };
 
+type StylingSourceMode = "photo_only" | "saved_wardrobe" | "saved_wardrobe_plus";
+
 export type SocialLoginPayload =
   | {
       provider: "google";
@@ -490,6 +492,8 @@ class ApiClient {
     outputMode: "text" | "image";
     imageInputMode: "single_item" | "multi_item";
     photos: { base64: string; mimeType?: string }[];
+    sourceMode: StylingSourceMode;
+    allowExtraPieces?: boolean;
   }) {
     return this.request<{
       lookName: string;
@@ -525,6 +529,8 @@ class ApiClient {
     outputMode: "text" | "image";
     imageInputMode: "single_item" | "multi_item";
     photos?: { base64: string; mimeType?: string }[];
+    sourceMode: StylingSourceMode;
+    allowExtraPieces?: boolean;
   }) {
     return this.request<{
       lookName: string;

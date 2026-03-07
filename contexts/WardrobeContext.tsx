@@ -13,6 +13,11 @@ export interface ClothingItem {
   createdAt: number;
 }
 
+export type StylingSourceMode =
+  | "photo_only"
+  | "saved_wardrobe"
+  | "saved_wardrobe_plus";
+
 export interface OutfitResult {
   id: string;
   items: ClothingItem[];
@@ -20,6 +25,10 @@ export interface OutfitResult {
   description: string;
   stylingTips: string[];
   imageBase64?: string;
+  sourceMode?: StylingSourceMode;
+  referencePhotoCount?: number;
+  wardrobeItemCount?: number;
+  allowExtraPieces?: boolean;
   createdAt: number;
 }
 

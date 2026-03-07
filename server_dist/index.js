@@ -623,6 +623,9 @@ function normalizeStyleGender(input) {
 function normalizeImageInputMode(input) {
   return input === "multi_item" ? "multi_item" : "single_item";
 }
+function normalizeStylingSourceMode(input) {
+  return input === "saved_wardrobe" || input === "saved_wardrobe_plus" ? input : "photo_only";
+}
 function normalizeStringValue(input) {
   if (typeof input === "string") return input.trim();
   if (Array.isArray(input)) {
@@ -773,29 +776,30 @@ function buildStylePrompt(options) {
     `- Preferred color palette: ${options.colorPalette || "No fixed palette"}`,
     `- Required pieces: ${options.requiredPieces.length > 0 ? options.requiredPieces.join(", ") : "None explicitly required"}`
   );
-  if (options.hasReferenceImages) {
-    promptParts.push("Reference image rules (MANDATORY):");
+  promptParts.push("Source mode rules (MANDATORY):");
+  if (options.sourceMode === "photo_only") {
     promptParts.push(
-      "- Treat uploaded image(s) as the source of truth for the main garments. Select clothing from those images first."
+      "- Build the outfit primarily from garments visible in the uploaded reference image(s).",
+      "- Do not use hidden wardrobe memory or invent a saved closet.",
+      options.allowExtraPieces ? '- You may add at most 2 subtle finishing pieces only when necessary. Mark each added item with "(added)" in usedPieces.' : "- Do not add extra garments that are not visible in the uploaded image(s).",
+      "- Keep garment identity faithful to the reference image(s): same silhouette, cut, fabric feel, pattern, and base colors.",
+      options.imageInputMode === "multi_item" ? "- Multi-item photo mode: combine visible garments across the uploaded images into one coherent outfit." : "- Single-item photo mode: prioritize garments from the uploaded image(s) exactly as shown."
     );
+  }
+  if (options.sourceMode === "saved_wardrobe") {
     promptParts.push(
-      "- Keep garment identity faithful to reference image(s): same silhouette, cut, fabric feel, pattern, and base colors."
+      "- Use ONLY the structured wardrobe pieces provided in the request.",
+      "- Do not add, invent, or suggest any extra garments as part of the final outfit.",
+      "- If the selected wardrobe pieces are not enough for a perfect look, still build the best outfit possible using only those pieces.",
+      '- In "usedPieces", include only pieces from the provided wardrobe list.'
     );
+  }
+  if (options.sourceMode === "saved_wardrobe_plus") {
     promptParts.push(
-      "- Do not redesign, replace, or remap the primary garments from reference image(s) with different items."
-    );
-    promptParts.push(
-      "- Optional additions are allowed only for missing finishing pieces (for example: belt, shoes, subtle accessories)."
-    );
-    if (options.imageInputMode === "multi_item") {
-      promptParts.push(
-        "- Multi-image mode: combine garments across uploaded images into one coherent outfit, preserving each selected garment."
-      );
-    } else {
-      promptParts.push("- Single-image mode: prioritize garments visible in the uploaded image.");
-    }
-    promptParts.push(
-      '- In "usedPieces", list reference-derived garments first; mark optional new additions with "(added)".'
+      "- Use the structured wardrobe pieces provided in the request as the main outfit foundation.",
+      "- You may add at most 2 finishing pieces only if the outfit needs them to feel complete.",
+      '- Any added piece must be clearly marked with "(added)" in usedPieces.',
+      "- Prioritize the user's own wardrobe before adding anything new."
     );
   }
   if (itemLines.length > 0) {
@@ -1988,6 +1992,8 @@ async function registerRoutes(app2) {
     const body = req.body || {};
     const outputMode = normalizeOutputMode(body.outputMode);
     const imageInputMode = normalizeImageInputMode(body.imageInputMode);
+    const sourceMode = normalizeStylingSourceMode(body.sourceMode);
+    const allowExtraPieces = body.allowExtraPieces === true || sourceMode === "saved_wardrobe_plus";
     const creditCost = STYLE_COSTS[outputMode];
     const normalizedItems = normalizeRequestedItems(body.items);
     const occasion = normalizeStringValue(body.occasion) || "Any occasion";
@@ -2003,6 +2009,16 @@ async function registerRoutes(app2) {
       uploadedImages = normalizeUploadedImages(body.photos, imageInputMode);
     } catch (error) {
       return res.status(400).json({ error: toErrorMessage(error, "Invalid image payload") });
+    }
+    if (sourceMode === "photo_only" && uploadedImages.length === 0) {
+      return res.status(400).json({
+        error: "Photo styling mode requires at least one uploaded photo."
+      });
+    }
+    if ((sourceMode === "saved_wardrobe" || sourceMode === "saved_wardrobe_plus") && normalizedItems.length === 0) {
+      return res.status(400).json({
+        error: "Wardrobe styling mode requires at least one selected wardrobe item."
+      });
     }
     if (normalizedItems.length === 0 && uploadedImages.length === 0 && !event && !customPrompt && requiredPieces.length === 0) {
       return res.status(400).json({
@@ -2033,7 +2049,9 @@ async function registerRoutes(app2) {
           requiredPieces,
           outputMode,
           hasReferenceImages: uploadedImages.length > 0,
-          imageInputMode
+          imageInputMode,
+          sourceMode,
+          allowExtraPieces
         })
       });
       let imageBase64;
@@ -2086,6 +2104,8 @@ async function registerRoutes(app2) {
     const body = req.body || {};
     const outputMode = normalizeOutputMode(body.outputMode);
     const imageInputMode = normalizeImageInputMode(body.imageInputMode);
+    const sourceMode = normalizeStylingSourceMode(body.sourceMode);
+    const allowExtraPieces = body.allowExtraPieces === true || sourceMode === "saved_wardrobe_plus";
     const creditCost = STYLE_COSTS[outputMode];
     const originalDescription = normalizeStringValue(body.originalDescription);
     const originalTips = normalizeStringList(body.originalTips);
@@ -2107,6 +2127,16 @@ async function registerRoutes(app2) {
       uploadedImages = normalizeUploadedImages(body.photos, imageInputMode);
     } catch (error) {
       return res.status(400).json({ error: toErrorMessage(error, "Invalid image payload") });
+    }
+    if (sourceMode === "photo_only" && uploadedImages.length === 0) {
+      return res.status(400).json({
+        error: "Photo styling mode requires at least one uploaded photo."
+      });
+    }
+    if ((sourceMode === "saved_wardrobe" || sourceMode === "saved_wardrobe_plus") && normalizedItems.length === 0) {
+      return res.status(400).json({
+        error: "Wardrobe styling mode requires at least one selected wardrobe item."
+      });
     }
     let creditsConsumed = false;
     try {
@@ -2135,7 +2165,9 @@ async function registerRoutes(app2) {
           originalTips,
           outputMode,
           hasReferenceImages: uploadedImages.length > 0,
-          imageInputMode
+          imageInputMode,
+          sourceMode,
+          allowExtraPieces
         })
       });
       let imageBase64;
@@ -2192,6 +2224,9 @@ var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var app = (0, import_express.default)();
 var log = console.log;
+app.get("/healthz", (_req, res) => {
+  res.status(200).send("ok");
+});
 function normalizeOriginValue(value) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -2393,12 +2428,13 @@ function configureExpoAndLanding(app2) {
   }
   app2.use(import_express.default.static(path.resolve(process.cwd(), "static-build")));
   if (hasWebBuild) {
-    app2.get("*", (req, res, next) => {
+    app2.use("/", (req, res, next) => {
       if (req.path.startsWith("/api") || req.path === "/manifest") {
         return next();
       }
       return res.sendFile(webIndexPath);
     });
+    log("SPA fallback configured with app.use('/')");
   }
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }

@@ -10,6 +10,13 @@ import Colors from "@/constants/colors";
 import { useWardrobe, OutfitResult } from "@/contexts/WardrobeContext";
 import { useCallback } from "react";
 
+function formatSourceMode(sourceMode?: OutfitResult["sourceMode"]) {
+  if (sourceMode === "saved_wardrobe") return "Wardrobe only";
+  if (sourceMode === "saved_wardrobe_plus") return "Wardrobe + extras";
+  if (sourceMode === "photo_only") return "Photo only";
+  return null;
+}
+
 function EmptyOutfits() {
   return (
     <View style={styles.emptyContainer}>
@@ -25,6 +32,7 @@ function EmptyOutfits() {
 function OutfitCard({ outfit, onDelete, onDownload }: { outfit: OutfitResult; onDelete: () => void; onDownload: () => void }) {
   const date = new Date(outfit.createdAt);
   const formattedDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const sourceModeLabel = formatSourceMode(outfit.sourceMode);
 
   return (
     <Animated.View entering={FadeInDown.duration(400)} style={styles.outfitCard}>
@@ -38,8 +46,15 @@ function OutfitCard({ outfit, onDelete, onDownload }: { outfit: OutfitResult; on
 
       <View style={styles.outfitContent}>
         <View style={styles.outfitMeta}>
-          <View style={styles.occasionBadge}>
-            <Text style={styles.occasionBadgeText}>{outfit.occasion}</Text>
+          <View style={styles.metaBadges}>
+            <View style={styles.occasionBadge}>
+              <Text style={styles.occasionBadgeText}>{outfit.occasion}</Text>
+            </View>
+            {sourceModeLabel ? (
+              <View style={styles.sourceModeBadge}>
+                <Text style={styles.sourceModeBadgeText}>{sourceModeLabel}</Text>
+              </View>
+            ) : null}
           </View>
           <Text style={styles.dateText}>{formattedDate}</Text>
         </View>
@@ -148,7 +163,7 @@ export default function OutfitsScreen() {
         }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) {
+    } catch {
       Alert.alert("Error", "Failed to download image.");
     }
   }, []);
@@ -232,6 +247,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  metaBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   occasionBadge: {
     backgroundColor: "rgba(201, 169, 110, 0.15)",
     paddingHorizontal: 12,
@@ -242,6 +262,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 12,
     color: Colors.accent,
+  },
+  sourceModeBadge: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  sourceModeBadgeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
   dateText: {
     fontFamily: "Inter_400Regular",

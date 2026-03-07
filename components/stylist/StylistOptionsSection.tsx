@@ -22,6 +22,7 @@ type StylistOptionsSectionProps = {
   setOutputMode: Dispatch<SetStateAction<OutputMode>>;
   styleCosts: Record<OutputMode, number>;
   imageInputMode: OptionalImageInputMode;
+  showPhotoSetupOption: boolean;
   updateImageInputMode: (nextMode: ImageInputMode) => void;
   maxPhotosByMode: Record<ImageInputMode, number>;
   eventDetails: string;
@@ -164,6 +165,7 @@ export default function StylistOptionsSection({
   setOutputMode,
   styleCosts,
   imageInputMode,
+  showPhotoSetupOption,
   updateImageInputMode,
   maxPhotosByMode,
   eventDetails,
@@ -311,46 +313,54 @@ export default function StylistOptionsSection({
 
           <OptionCard
             title="Photo setup"
-            value={imageModeLabel}
+            value={showPhotoSetupOption ? imageModeLabel : "Disabled in current source mode"}
             active={showPhotoMode}
             cardStyle={summaryCardStyle}
             onPress={() => toggleCard("photo_mode")}
             styles={styles}
           >
-            <Text style={styles.inlineHelperText}>Only needed if you upload photos.</Text>
-            <View style={[styles.modeRow, styles.modeRowStacked]}>
-              <Pressable
-                onPress={() => updateImageInputMode("single_item")}
-                style={[
-                  styles.modeChip,
-                  styles.modeChipStacked,
-                  imageInputMode === "single_item" ? styles.modeChipActive : undefined,
-                ]}
-              >
-                <Text style={imageInputMode === "single_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
-                  One Item / Photo
-                </Text>
-                <Text style={imageInputMode === "single_item" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}>
-                  Up to {maxPhotosByMode.single_item} photos
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => updateImageInputMode("multi_item")}
-                style={[
-                  styles.modeChip,
-                  styles.modeChipStacked,
-                  imageInputMode === "multi_item" ? styles.modeChipActive : undefined,
-                ]}
-              >
-                <Text style={imageInputMode === "multi_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
-                  Multiple Items / Photo
-                </Text>
-                <Text style={imageInputMode === "multi_item" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}>
-                  Up to {maxPhotosByMode.multi_item} photos
-                </Text>
-              </Pressable>
-            </View>
-            {!imageInputMode && <Text style={styles.inlineHelperText}>No selection needed for text-only styling.</Text>}
+            {showPhotoSetupOption ? (
+              <>
+                <Text style={styles.inlineHelperText}>Only needed if you upload photos.</Text>
+                <View style={[styles.modeRow, styles.modeRowStacked]}>
+                  <Pressable
+                    onPress={() => updateImageInputMode("single_item")}
+                    style={[
+                      styles.modeChip,
+                      styles.modeChipStacked,
+                      imageInputMode === "single_item" ? styles.modeChipActive : undefined,
+                    ]}
+                  >
+                    <Text style={imageInputMode === "single_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
+                      One Item / Photo
+                    </Text>
+                    <Text style={imageInputMode === "single_item" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}>
+                      Up to {maxPhotosByMode.single_item} photos
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => updateImageInputMode("multi_item")}
+                    style={[
+                      styles.modeChip,
+                      styles.modeChipStacked,
+                      imageInputMode === "multi_item" ? styles.modeChipActive : undefined,
+                    ]}
+                  >
+                    <Text style={imageInputMode === "multi_item" ? styles.modeChipTitleActive : styles.modeChipTitle}>
+                      Multiple Items / Photo
+                    </Text>
+                    <Text style={imageInputMode === "multi_item" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}>
+                      Up to {maxPhotosByMode.multi_item} photos
+                    </Text>
+                  </Pressable>
+                </View>
+                {!imageInputMode && <Text style={styles.inlineHelperText}>No selection needed for text-only styling.</Text>}
+              </>
+            ) : (
+              <Text style={styles.inlineHelperText}>
+                Photo setup is available only when &quot;Style from this photo&quot; is selected.
+              </Text>
+            )}
           </OptionCard>
 
           <OptionCard

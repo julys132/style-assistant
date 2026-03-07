@@ -23,7 +23,12 @@ import * as Sharing from "expo-sharing";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
-import { useWardrobe, ClothingItem, OutfitResult } from "@/contexts/WardrobeContext";
+import {
+  useWardrobe,
+  ClothingItem,
+  OutfitResult,
+  StylingSourceMode,
+} from "@/contexts/WardrobeContext";
 import { useCredits } from "@/contexts/CreditsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
@@ -222,6 +227,7 @@ export default function StylistScreen() {
   const [styleGender, setStyleGender] = useState<StyleGender>("");
   const [requiredPiecesText, setRequiredPiecesText] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [stylingSourceMode, setStylingSourceMode] = useState<StylingSourceMode>("photo_only");
   const [outputMode, setOutputMode] = useState<OutputMode>("text");
   const [imageInputMode, setImageInputMode] = useState<OptionalImageInputMode>(null);
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([]);
@@ -248,6 +254,29 @@ export default function StylistScreen() {
   const photoCardHeight = Math.round(photoCardWidth * 1.3);
   const maxPhotosAllowed = MAX_PHOTOS_BY_MODE[imageInputMode ?? "single_item"];
   const styleCreditsCost = STYLE_COSTS[outputMode];
+  const isPhotoOnlyMode = stylingSourceMode === "photo_only";
+  const isSavedWardrobeMode = stylingSourceMode === "saved_wardrobe";
+  const isSavedWardrobePlusMode = stylingSourceMode === "saved_wardrobe_plus";
+  const allowExtraPieces = isSavedWardrobePlusMode;
+  const sourceModeLabel =
+    stylingSourceMode === "photo_only"
+      ? "Style from this photo"
+      : stylingSourceMode === "saved_wardrobe"
+        ? "Style from my wardrobe"
+        : "Style from my wardrobe + add missing pieces";
+  const styleButtonLabel =
+    stylingSourceMode === "photo_only"
+      ? outputMode === "text"
+        ? "Style From This Photo"
+        : "Show This Photo As A Look"
+      : stylingSourceMode === "saved_wardrobe"
+        ? outputMode === "text"
+          ? "Style From My Wardrobe"
+          : "Preview My Wardrobe Look"
+        : outputMode === "text"
+          ? "Style My Wardrobe + Finish It"
+          : "Preview Wardrobe + Added Pieces";
+  const selectedClothing = items.filter((item) => selectedItems.includes(item.id));
   const hasLookContext =
     selectedItems.length > 0 ||
     customPrompt.trim().length > 0 ||
@@ -284,11 +313,17 @@ export default function StylistScreen() {
   const stylePreferencesLabel = hasStylePreferences ? "Custom preferences selected" : "Optional";
   const resolvedStyleGender = styleGender || user?.styleGender || "";
   const saveDisabled = !pendingOutfitSave || isCurrentLookSaved;
+  const showPhotoSetupOption = isPhotoOnlyMode;
 
   useEffect(() => {
     if (!user?.styleGender) return;
     setStyleGender((current) => current || user.styleGender || "");
   }, [user?.id, user?.styleGender]);
+
+  useEffect(() => {
+    if (isPhotoOnlyMode) return;
+    setShowPhotoMode(false);
+  }, [isPhotoOnlyMode]);
 
   const selectStyleGender = useCallback((nextGender: StyleGender) => {
     setStyleGender(nextGender);
@@ -507,6 +542,20 @@ export default function StylistScreen() {
       .map((value: string) => value.trim())
       .filter(Boolean);
 
+    if (isPhotoOnlyMode && uploadedPhotos.length === 0) {
+      const message = "Upload at least one photo in \"Style from this photo\" mode.";
+      setActionHint(message);
+      Alert.alert("Photo needed", message);
+      return;
+    }
+
+    if (!isPhotoOnlyMode && selectedClothing.length === 0) {
+      const message = "Select at least one saved wardrobe item in wardrobe mode.";
+      setActionHint(message);
+      Alert.alert("Wardrobe item needed", message);
+      return;
+    }
+
     if (!hasLookContext) {
       const message = "Add at least one detail: clothing text, photo, wardrobe item, event, or required piece.";
       setActionHint(message);
@@ -538,14 +587,15 @@ export default function StylistScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const selectedClothing = items.filter((i) => selectedItems.includes(i.id));
       const data = await apiClient.generateStyle({
-        items: selectedClothing.map((i) => ({
-          name: i.name,
-          category: i.category,
-          color: i.color,
-          description: i.description,
-        })),
+        items: isPhotoOnlyMode
+          ? []
+          : selectedClothing.map((i) => ({
+              name: i.name,
+              category: i.category,
+              color: i.color,
+              description: i.description,
+            })),
         occasion: resolvedOccasion,
         gender: resolvedStyleGender || undefined,
         event: eventDetails.trim(),
@@ -556,10 +606,14 @@ export default function StylistScreen() {
         customPrompt: customPrompt.trim(),
         outputMode,
         imageInputMode: resolvedImageInputMode,
-        photos: uploadedPhotos.map((photo) => ({
-          base64: photo.base64,
-          mimeType: photo.mimeType,
-        })),
+        photos: isPhotoOnlyMode
+          ? uploadedPhotos.map((photo) => ({
+              base64: photo.base64,
+              mimeType: photo.mimeType,
+            }))
+          : [],
+        sourceMode: stylingSourceMode,
+        allowExtraPieces,
       });
       const renderImageBase64 = sanitizeGeneratedImage(
         data.imageBase64,
@@ -579,6 +633,10 @@ export default function StylistScreen() {
         description: data.description,
         stylingTips: data.tips || [],
         imageBase64: savedImageBase64,
+        sourceMode: stylingSourceMode,
+        referencePhotoCount: isPhotoOnlyMode ? uploadedPhotos.length : 0,
+        wardrobeItemCount: selectedClothing.length,
+        allowExtraPieces,
       });
       setIsCurrentLookSaved(false);
       if (data.imageBase64 && !renderImageBase64) {
@@ -627,11 +685,13 @@ export default function StylistScreen() {
     colorPalette,
     colorPaletteOther,
     imageInputMode,
+    isPhotoOnlyMode,
+    allowExtraPieces,
+    stylingSourceMode,
     requiredPiecesText,
     credits,
     styleCreditsCost,
-    items,
-    selectedItems,
+    selectedClothing,
     eventDetails,
     resolvedStyleGender,
     customPrompt,
@@ -676,6 +736,20 @@ export default function StylistScreen() {
       colorPalette === "Other" ? colorPaletteOther.trim() : colorPalette;
     const resolvedImageInputMode: ImageInputMode = imageInputMode ?? "single_item";
 
+    if (isPhotoOnlyMode && uploadedPhotos.length === 0) {
+      const message = "Upload at least one photo in \"Style from this photo\" mode.";
+      setActionHint(message);
+      Alert.alert("Photo needed", message);
+      return;
+    }
+
+    if (!isPhotoOnlyMode && selectedClothing.length === 0) {
+      const message = "Select at least one saved wardrobe item in wardrobe mode.";
+      setActionHint(message);
+      Alert.alert("Wardrobe item needed", message);
+      return;
+    }
+
     if (!modifyPrompt.trim()) {
       setActionHint("Write what you want changed before applying edits.");
       Alert.alert("Error", "Please describe the changes you'd like");
@@ -704,17 +778,18 @@ export default function StylistScreen() {
         .split(/[,;\n]/)
         .map((value: string) => value.trim())
         .filter(Boolean);
-      const selectedClothing = items.filter((i) => selectedItems.includes(i.id));
       const data = await apiClient.modifyStyle({
         originalDescription: result?.description || "",
         originalTips: result?.tips || [],
         modifyRequest: modifyPrompt.trim(),
-        items: selectedClothing.map((i) => ({
-          name: i.name,
-          category: i.category,
-          color: i.color,
-          description: i.description,
-        })),
+        items: isPhotoOnlyMode
+          ? []
+          : selectedClothing.map((i) => ({
+              name: i.name,
+              category: i.category,
+              color: i.color,
+              description: i.description,
+            })),
         occasion: resolvedOccasion,
         gender: resolvedStyleGender || undefined,
         event: eventDetails.trim(),
@@ -725,10 +800,14 @@ export default function StylistScreen() {
         requiredPieces,
         outputMode,
         imageInputMode: resolvedImageInputMode,
-        photos: uploadedPhotos.map((photo) => ({
-          base64: photo.base64,
-          mimeType: photo.mimeType,
-        })),
+        photos: isPhotoOnlyMode
+          ? uploadedPhotos.map((photo) => ({
+              base64: photo.base64,
+              mimeType: photo.mimeType,
+            }))
+          : [],
+        sourceMode: stylingSourceMode,
+        allowExtraPieces,
       });
       const renderImageBase64 = sanitizeGeneratedImage(
         data.imageBase64,
@@ -748,6 +827,10 @@ export default function StylistScreen() {
         description: data.description,
         stylingTips: data.tips || [],
         imageBase64: savedImageBase64,
+        sourceMode: stylingSourceMode,
+        referencePhotoCount: isPhotoOnlyMode ? uploadedPhotos.length : 0,
+        wardrobeItemCount: selectedClothing.length,
+        allowExtraPieces,
       });
       setIsCurrentLookSaved(false);
       if (data.imageBase64 && !renderImageBase64) {
@@ -784,8 +867,6 @@ export default function StylistScreen() {
   }, [
     modifyPrompt,
     result,
-    items,
-    selectedItems,
     occasion,
     resolvedStyleGender,
     eventDetails,
@@ -800,10 +881,14 @@ export default function StylistScreen() {
     occasionOther,
     outputMode,
     imageInputMode,
+    isPhotoOnlyMode,
+    allowExtraPieces,
+    stylingSourceMode,
     uploadedPhotos,
     styleCreditsCost,
     credits,
     refreshCredits,
+    selectedClothing,
   ]);
 
   const handleSaveOutfit = useCallback(async () => {
@@ -842,105 +927,216 @@ export default function StylistScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.section}>
-          <Text style={styles.uploadSectionTitle}>Digital Wardrobe</Text>
-          <View style={styles.uploadShowcase}>
-            <LinearGradient
-              colors={["rgba(255,255,255,0.06)", "rgba(255,255,255,0.01)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-
-            <Pressable onPress={pickPhoto} style={styles.uploadStage}>
-              <View style={styles.uploadGlow}>
-                <View style={styles.uploadPlayButton}>
-                  <Ionicons name="add" size={28} color={Colors.white} />
-                </View>
-              </View>
-
-              {ORBIT_SLOTS.map((slot, index) => {
-                const uri = uploadedPhotos[index]?.uri;
-                const positionStyle = {
-                  top: slot.top,
-                  transform: [{ rotate: slot.rotate }],
-                  ...("left" in slot ? { left: slot.left } : { right: slot.right }),
-                } satisfies ViewStyle;
-                return (
-                  <View
-                    key={index}
-                    style={[styles.uploadOrbitCard, positionStyle]}
-                  >
-                    {uri ? (
-                      <Image source={{ uri }} style={styles.uploadOrbitImage} contentFit="cover" />
-                    ) : (
-                      <View style={styles.uploadOrbitPlaceholder}>
-                        <MaterialCommunityIcons name="hanger" size={18} color={Colors.textMuted} />
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+        <Animated.View entering={FadeInDown.delay(70).duration(500)} style={styles.section}>
+          <Text style={styles.sectionTitle}>Choose styling mode</Text>
+          <View style={styles.modeRowStacked}>
+            <Pressable
+              onPress={() => {
+                setStylingSourceMode("photo_only");
+                setActionHint("");
+              }}
+              style={[
+                styles.modeChip,
+                styles.modeChipStacked,
+                stylingSourceMode === "photo_only" ? styles.modeChipActive : undefined,
+              ]}
+            >
+              <Text
+                style={stylingSourceMode === "photo_only" ? styles.modeChipTitleActive : styles.modeChipTitle}
+              >
+                Style from this photo
+              </Text>
+              <Text
+                style={stylingSourceMode === "photo_only" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}
+              >
+                Uses only clothes visible in uploaded photo(s).
+              </Text>
             </Pressable>
 
-            <View style={styles.uploadMeta}>
-              <Text style={styles.uploadMetaTitle}>
-                {uploadedPhotos.length > 0
-                  ? `${uploadedPhotos.length}/${maxPhotosAllowed} reference photos`
-                  : imageInputMode
-                    ? `Add up to ${maxPhotosAllowed} reference photos`
-                    : "Want to upload photos? Tap Gallery or Camera to choose setup"}
+            <Pressable
+              onPress={() => {
+                setStylingSourceMode("saved_wardrobe");
+                setActionHint("");
+              }}
+              style={[
+                styles.modeChip,
+                styles.modeChipStacked,
+                stylingSourceMode === "saved_wardrobe" ? styles.modeChipActive : undefined,
+              ]}
+            >
+              <Text
+                style={stylingSourceMode === "saved_wardrobe" ? styles.modeChipTitleActive : styles.modeChipTitle}
+              >
+                Style from my saved wardrobe
               </Text>
-              <Text style={styles.uploadMetaSubtitle}>
-                Photos are optional. You can skip photo setup and type your request below.
+              <Text
+                style={stylingSourceMode === "saved_wardrobe" ? styles.modeChipSubtitleActive : styles.modeChipSubtitle}
+              >
+                Uses only selected items from your wardrobe.
               </Text>
-            </View>
+            </Pressable>
 
-            <View style={styles.uploadActions}>
-              <Pressable onPress={pickPhoto} style={styles.uploadActionButton}>
-                <Ionicons name="image-outline" size={18} color={Colors.white} />
-                <Text style={styles.uploadActionText}>Gallery</Text>
-              </Pressable>
-              <Pressable onPress={takePhoto} style={styles.uploadActionButton}>
-                <Ionicons name="camera-outline" size={18} color={Colors.white} />
-                <Text style={styles.uploadActionText}>Camera</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.orTypeCallout}>
-              <Text style={styles.orTypeCalloutLabel}>NO PHOTOS? TYPE HERE</Text>
-              <Text style={styles.orTypeCalloutText}>
-                Add one or more pieces (example: &quot;military green satin long skirt, white shirt&quot;). You can be short.
+            <Pressable
+              onPress={() => {
+                setStylingSourceMode("saved_wardrobe_plus");
+                setActionHint("");
+              }}
+              style={[
+                styles.modeChip,
+                styles.modeChipStacked,
+                stylingSourceMode === "saved_wardrobe_plus" ? styles.modeChipActive : undefined,
+              ]}
+            >
+              <Text
+                style={
+                  stylingSourceMode === "saved_wardrobe_plus"
+                    ? styles.modeChipTitleActive
+                    : styles.modeChipTitle
+                }
+              >
+                Style wardrobe + add missing pieces
               </Text>
-              <TextInput
-                style={styles.orTypeInput}
-                value={customPrompt}
-                onChangeText={(value) => {
-                  setCustomPrompt(value);
-                  setActionHint("");
-                }}
-                placeholder="Type your outfit idea here..."
-                placeholderTextColor={Colors.textMuted}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+              <Text
+                style={
+                  stylingSourceMode === "saved_wardrobe_plus"
+                    ? styles.modeChipSubtitleActive
+                    : styles.modeChipSubtitle
+                }
+              >
+                Starts from your wardrobe and adds at most a few finishing pieces.
+              </Text>
+            </Pressable>
           </View>
-
-          {uploadedPhotos.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photosScroll}>
-              {uploadedPhotos.map((photo, index) => (
-                <View key={index} style={[styles.photoThumb, { width: photoCardWidth, height: photoCardHeight }]}>
-                  <Image source={{ uri: photo.uri }} style={styles.photoThumbImage} contentFit="cover" />
-                  <Pressable onPress={() => removePhoto(index)} style={styles.removePhotoBtn}>
-                    <Ionicons name="close" size={14} color={Colors.white} />
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+          <Text style={[styles.inlineHelperText, { marginTop: 10 }]}>Current mode: {sourceModeLabel}</Text>
         </Animated.View>
+
+        {isPhotoOnlyMode ? (
+          <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.section}>
+            <Text style={styles.uploadSectionTitle}>Reference Photos</Text>
+            <View style={styles.uploadShowcase}>
+              <LinearGradient
+                colors={["rgba(255,255,255,0.06)", "rgba(255,255,255,0.01)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+
+              <Pressable onPress={pickPhoto} style={styles.uploadStage}>
+                <View style={styles.uploadGlow}>
+                  <View style={styles.uploadPlayButton}>
+                    <Ionicons name="add" size={28} color={Colors.white} />
+                  </View>
+                </View>
+
+                {ORBIT_SLOTS.map((slot, index) => {
+                  const uri = uploadedPhotos[index]?.uri;
+                  const positionStyle = {
+                    top: slot.top,
+                    transform: [{ rotate: slot.rotate }],
+                    ...("left" in slot ? { left: slot.left } : { right: slot.right }),
+                  } satisfies ViewStyle;
+                  return (
+                    <View
+                      key={index}
+                      style={[styles.uploadOrbitCard, positionStyle]}
+                    >
+                      {uri ? (
+                        <Image source={{ uri }} style={styles.uploadOrbitImage} contentFit="cover" />
+                      ) : (
+                        <View style={styles.uploadOrbitPlaceholder}>
+                          <MaterialCommunityIcons name="hanger" size={18} color={Colors.textMuted} />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </Pressable>
+
+              <View style={styles.uploadMeta}>
+                <Text style={styles.uploadMetaTitle}>
+                  {uploadedPhotos.length > 0
+                    ? `${uploadedPhotos.length}/${maxPhotosAllowed} reference photos`
+                    : imageInputMode
+                      ? `Add up to ${maxPhotosAllowed} reference photos`
+                      : "Want to upload photos? Tap Gallery or Camera to choose setup"}
+                </Text>
+                <Text style={styles.uploadMetaSubtitle}>
+                  Photos are optional. You can skip photo setup and type your request below.
+                </Text>
+              </View>
+
+              <View style={styles.uploadActions}>
+                <Pressable onPress={pickPhoto} style={styles.uploadActionButton}>
+                  <Ionicons name="image-outline" size={18} color={Colors.white} />
+                  <Text style={styles.uploadActionText}>Gallery</Text>
+                </Pressable>
+                <Pressable onPress={takePhoto} style={styles.uploadActionButton}>
+                  <Ionicons name="camera-outline" size={18} color={Colors.white} />
+                  <Text style={styles.uploadActionText}>Camera</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.orTypeCallout}>
+                <Text style={styles.orTypeCalloutLabel}>NO PHOTOS? TYPE HERE</Text>
+                <Text style={styles.orTypeCalloutText}>
+                  Add one or more pieces (example: &quot;military green satin long skirt, white shirt&quot;). You can be short.
+                </Text>
+                <TextInput
+                  style={styles.orTypeInput}
+                  value={customPrompt}
+                  onChangeText={(value) => {
+                    setCustomPrompt(value);
+                    setActionHint("");
+                  }}
+                  placeholder="Type your outfit idea here..."
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            {uploadedPhotos.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photosScroll}>
+                {uploadedPhotos.map((photo, index) => (
+                  <View key={index} style={[styles.photoThumb, { width: photoCardWidth, height: photoCardHeight }]}>
+                    <Image source={{ uri: photo.uri }} style={styles.photoThumbImage} contentFit="cover" />
+                    <Pressable onPress={() => removePhoto(index)} style={styles.removePhotoBtn}>
+                      <Ionicons name="close" size={14} color={Colors.white} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeInDown.delay(100).duration(500)} style={styles.section}>
+            <View style={styles.dropdownCard}>
+              <View style={styles.dropdownContent}>
+                <Text style={styles.dropdownTitle}>Photo upload is off in this mode</Text>
+                <Text style={styles.dropdownSubtitle}>
+                  {isSavedWardrobeMode
+                    ? "This mode styles only from your saved wardrobe and does not add extra pieces."
+                    : "This mode starts from your saved wardrobe and may add a couple of finishing pieces if needed."}
+                </Text>
+                <TextInput
+                  style={styles.promptInput}
+                  value={customPrompt}
+                  onChangeText={(value) => {
+                    setCustomPrompt(value);
+                    setActionHint("");
+                  }}
+                  placeholder="Optional: add extra instructions for the look"
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         <StylistOptionsSection
           styles={styles}
@@ -949,6 +1145,7 @@ export default function StylistScreen() {
           setOutputMode={setOutputMode}
           styleCosts={STYLE_COSTS}
           imageInputMode={imageInputMode}
+          showPhotoSetupOption={showPhotoSetupOption}
           updateImageInputMode={updateImageInputMode}
           maxPhotosByMode={MAX_PHOTOS_BY_MODE}
           eventDetails={eventDetails}
@@ -1004,7 +1201,7 @@ export default function StylistScreen() {
           genderOptions={GENDER_OPTIONS}
         />
 
-        {items.length > 0 && (
+        {!isPhotoOnlyMode && items.length > 0 && (
           <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.section}>
             <Text style={styles.sectionTitle}>
               Select From Wardrobe ({selectedItems.length} selected)
@@ -1022,6 +1219,19 @@ export default function StylistScreen() {
           </Animated.View>
         )}
 
+        {!isPhotoOnlyMode && items.length === 0 && (
+          <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.section}>
+            <View style={styles.dropdownCard}>
+              <View style={styles.dropdownContent}>
+                <Text style={styles.dropdownTitle}>Your wardrobe is empty</Text>
+                <Text style={styles.dropdownSubtitle}>
+                  Add items in the Wardrobe tab first, then come back to style from your saved closet.
+                </Text>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
         <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.section}>
           <Pressable
             onPress={handleStyle}
@@ -1036,15 +1246,19 @@ export default function StylistScreen() {
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={Colors.black} />
                 <Text style={styles.styleButtonText}>
-                  {outputMode === "text" ? "Putting your look together..." : "Rendering your look preview..."}
+                  {isPhotoOnlyMode
+                    ? outputMode === "text"
+                      ? "Styling from your photo..."
+                      : "Rendering your photo-based look..."
+                    : outputMode === "text"
+                      ? "Styling from your saved wardrobe..."
+                      : "Rendering your wardrobe look..."}
                 </Text>
               </View>
             ) : (
               <View style={styles.loadingRow}>
                 <Ionicons name="sparkles" size={20} color={Colors.black} />
-                <Text style={styles.styleButtonText}>
-                  {outputMode === "text" ? "Style My Outfit" : "Show Me The Look"}
-                </Text>
+                <Text style={styles.styleButtonText}>{styleButtonLabel}</Text>
                 <View style={styles.creditCostBadge}>
                   <Text style={styles.creditCostText}>{styleCreditsCost} credits</Text>
                 </View>
