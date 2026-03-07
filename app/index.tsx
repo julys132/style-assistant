@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 import { API_BASE_URL, apiClient } from "@/lib/api-client";
 
@@ -11,26 +11,32 @@ export default function IndexScreen() {
       try {
         try {
           const health = await apiClient.healthCheck();
-          console.log("[startup] API reachable", { baseUrl: API_BASE_URL, health });
+          console.log("[startup] API reachable", {
+            baseUrl: API_BASE_URL,
+            health,
+          });
         } catch (healthError) {
           console.warn("[startup] API health check failed", {
             baseUrl: API_BASE_URL,
-            message: healthError instanceof Error ? healthError.message : String(healthError),
+            message:
+              healthError instanceof Error
+                ? healthError.message
+                : String(healthError),
           });
         }
 
         await apiClient.init();
 
-        if (!apiClient.isAuthenticated()) {
-          if (mounted) router.replace("/(auth)/login");
+        if (apiClient.isAuthenticated()) {
+          await apiClient.getProfile();
+          if (mounted) router.replace("/(tabs)/wardrobe");
           return;
         }
 
-        await apiClient.getProfile();
-        if (mounted) router.replace("/(tabs)/wardrobe");
+        if (mounted) router.replace("/welcome");
       } catch {
         await apiClient.clearAuth();
-        if (mounted) router.replace("/(auth)/login");
+        if (mounted) router.replace("/welcome");
       }
     })();
 
@@ -40,9 +46,18 @@ export default function IndexScreen() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-      <ActivityIndicator size="large" color="#C9A96E" />
+    <View style={styles.loaderWrap}>
+      <ActivityIndicator size="large" color="#FFFFFF" />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  loaderWrap: {
+    flex: 1,
+    backgroundColor: "#0A0A0F",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 

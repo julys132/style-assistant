@@ -18,12 +18,13 @@ void SplashScreen.preventAutoHideAsync().catch((error) => {
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#000" } }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" options={{ presentation: "modal", headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="payment-success" options={{ headerShown: false }} />
-    </Stack>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#000" } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="(auth)" options={{ presentation: "modal", headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="payment-success" options={{ headerShown: false }} />
+      </Stack>
   );
 }
 
