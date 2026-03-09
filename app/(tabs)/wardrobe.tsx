@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -47,6 +48,16 @@ const SUGGEST_MODELS = [
   { id: "llava", label: "LLaVA" },
 ] as const;
 type SuggestModel = (typeof SUGGEST_MODELS)[number]["id"];
+type WardrobeGridSize = "small" | "medium" | "large";
+
+const DEFAULT_SUGGEST_MODEL: SuggestModel = "uform";
+const SHOW_DEVELOPER_MODEL_SWITCH =
+  __DEV__ || process.env.EXPO_PUBLIC_SHOW_WARDROBE_MODEL_SWITCH === "true";
+const GRID_SIZE_OPTIONS: { id: WardrobeGridSize; label: string }[] = [
+  { id: "small", label: "Small" },
+  { id: "medium", label: "Medium" },
+  { id: "large", label: "Large" },
+];
 
 function EmptyWardrobe() {
   return (
@@ -60,9 +71,17 @@ function EmptyWardrobe() {
   );
 }
 
-function ClothingCard({ item, onDelete }: { item: ClothingItem; onDelete: (id: string) => void }) {
+function ClothingCard({
+  item,
+  onDelete,
+  cardWidth,
+}: {
+  item: ClothingItem;
+  onDelete: (id: string) => void;
+  cardWidth: number;
+}) {
   return (
-    <Animated.View entering={FadeInDown.duration(400)} style={styles.clothingCard}>
+    <Animated.View entering={FadeInDown.duration(400)} style={[styles.clothingCard, { width: cardWidth }]}>
       {item.imageUri ? (
         <Image source={{ uri: item.imageUri }} style={styles.clothingImage} contentFit="cover" />
       ) : (
@@ -91,6 +110,7 @@ function ClothingCard({ item, onDelete }: { item: ClothingItem; onDelete: (id: s
 
 export default function WardrobeScreen() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { items, addItem, removeItem } = useWardrobe();
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
@@ -101,21 +121,43 @@ export default function WardrobeScreen() {
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
   const [imageBase64, setImageBase64] = useState("");
   const [imageMimeType, setImageMimeType] = useState("image/jpeg");
-  const [suggestModel, setSuggestModel] = useState<SuggestModel>("auto");
+  const [suggestModel, setSuggestModel] = useState<SuggestModel>(DEFAULT_SUGGEST_MODEL);
   const [suggestedShade, setSuggestedShade] = useState("");
   const [modelUsedLabel, setModelUsedLabel] = useState("");
   const [description, setDescription] = useState("");
+  const [gridSize, setGridSize] = useState<WardrobeGridSize>("small");
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const listHorizontalPadding = 20;
+  const gridGap = 10;
+  const gridColumns =
+    gridSize === "small"
+      ? screenWidth >= 1200
+        ? 5
+        : screenWidth >= 960
+          ? 4
+          : screenWidth >= 640
+            ? 3
+            : 2
+      : gridSize === "medium"
+        ? screenWidth >= 960
+          ? 3
+          : 2
+        : screenWidth >= 960
+          ? 2
+          : 1;
+  const cardWidth = Math.floor(
+    (screenWidth - listHorizontalPadding * 2 - gridGap * (gridColumns - 1)) / gridColumns,
+  );
 
   const pickImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [3, 4],
-      quality: 0.7,
+      quality: 0.45,
       base64: true,
     });
     const selectedAsset = !result.canceled && result.assets[0] ? result.assets[0] : null;
@@ -220,7 +262,7 @@ export default function WardrobeScreen() {
     setImageMimeType("image/jpeg");
     setSuggestedShade("");
     setModelUsedLabel("");
-    setSuggestModel("auto");
+    setSuggestModel(DEFAULT_SUGGEST_MODEL);
     setDescription("");
     setSuggesting(false);
   };
@@ -272,12 +314,33 @@ export default function WardrobeScreen() {
         </Pressable>
       </Animated.View>
 
+      <View style={styles.viewModeContainer}>
+        <Text style={styles.viewModeLabel}>View size</Text>
+        <View style={styles.viewModeRow}>
+          {GRID_SIZE_OPTIONS.map((option) => (
+            <Pressable
+              key={option.id}
+              onPress={() => {
+                setGridSize(option.id);
+                Haptics.selectionAsync();
+              }}
+              style={[styles.viewModeChip, gridSize === option.id && styles.viewModeChipActive]}
+            >
+              <Text style={[styles.viewModeChipText, gridSize === option.id && styles.viewModeChipTextActive]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ClothingCard item={item} onDelete={handleDelete} />}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
+        renderItem={({ item }) => <ClothingCard item={item} onDelete={handleDelete} cardWidth={cardWidth} />}
+        numColumns={gridColumns}
+        key={`wardrobe-grid-${gridColumns}`}
+        columnWrapperStyle={gridColumns > 1 ? styles.row : undefined}
         contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
         ListEmptyComponent={<EmptyWardrobe />}
         showsVerticalScrollIndicator={false}
@@ -309,34 +372,40 @@ export default function WardrobeScreen() {
                   </Pressable>
                   {imageUri ? (
                     <View style={styles.suggestBlock}>
-                      <Text style={styles.inputLabel}>AI Model</Text>
-                      <View style={styles.suggestModelRow}>
-                        {SUGGEST_MODELS.map((option) => (
-                          <Pressable
-                            key={option.id}
-                            onPress={() => {
-                              setSuggestModel(option.id);
-                              Haptics.selectionAsync();
-                            }}
-                            style={[styles.suggestModelChip, suggestModel === option.id && styles.suggestModelChipActive]}
-                          >
-                            <Text
-                              style={[
-                                styles.suggestModelChipText,
-                                suggestModel === option.id && styles.suggestModelChipTextActive,
-                              ]}
-                            >
-                              {option.label}
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
+                      {SHOW_DEVELOPER_MODEL_SWITCH ? (
+                        <>
+                          <Text style={styles.inputLabel}>AI Model (Developer)</Text>
+                          <View style={styles.suggestModelRow}>
+                            {SUGGEST_MODELS.map((option) => (
+                              <Pressable
+                                key={option.id}
+                                onPress={() => {
+                                  setSuggestModel(option.id);
+                                  Haptics.selectionAsync();
+                                }}
+                                style={[styles.suggestModelChip, suggestModel === option.id && styles.suggestModelChipActive]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.suggestModelChipText,
+                                    suggestModel === option.id && styles.suggestModelChipTextActive,
+                                  ]}
+                                >
+                                  {option.label}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </>
+                      ) : null}
                       <Text style={styles.suggestHintText}>
-                        {suggestModel === "uform"
-                          ? "Uform primary, LLaVA backup."
-                          : suggestModel === "llava"
-                            ? "LLaVA primary, Uform backup."
-                            : "Auto: Uform primary, LLaVA backup."}
+                        {SHOW_DEVELOPER_MODEL_SWITCH
+                          ? suggestModel === "uform"
+                            ? "Uform primary, LLaVA backup."
+                            : suggestModel === "llava"
+                              ? "LLaVA primary, Uform backup."
+                              : "Auto: Uform primary, LLaVA backup."
+                          : "Using default low-cost AI model."}
                       </Text>
 
                       <Pressable
@@ -355,7 +424,7 @@ export default function WardrobeScreen() {
                         )}
                       </Pressable>
 
-                      {modelUsedLabel ? (
+                      {SHOW_DEVELOPER_MODEL_SWITCH && modelUsedLabel ? (
                         <Text style={styles.suggestHintText}>Suggested by: {modelUsedLabel}</Text>
                       ) : null}
                       {suggestedShade ? (
@@ -509,8 +578,44 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  listContent: { paddingHorizontal: 14, paddingTop: 8 },
-  row: { gap: 10, paddingHorizontal: 6 },
+  viewModeContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    gap: 8,
+  },
+  viewModeLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  viewModeRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  viewModeChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    backgroundColor: Colors.surfaceLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  viewModeChipActive: {
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(201, 169, 110, 0.16)",
+  },
+  viewModeChipText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  viewModeChipTextActive: {
+    color: Colors.accent,
+  },
+  listContent: { paddingHorizontal: 20, paddingTop: 8 },
+  row: { gap: 10, marginBottom: 10 },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -531,7 +636,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   clothingCard: {
-    flex: 1,
     backgroundColor: Colors.card,
     borderRadius: 16,
     overflow: "hidden",
@@ -612,7 +716,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
   },
-  pickedImage: { width: "100%", height: 200, borderRadius: 16 },
+  pickedImage: { width: "100%", height: 170, borderRadius: 16 },
   suggestBlock: { gap: 8 },
   suggestModelRow: { flexDirection: "row", gap: 8 },
   suggestModelChip: {
