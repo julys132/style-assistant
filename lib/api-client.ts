@@ -8,6 +8,16 @@ export const STORAGE_KEYS = {
 };
 
 type StylingSourceMode = "photo_only" | "saved_wardrobe" | "saved_wardrobe_plus";
+type WardrobeSuggestModel = "auto" | "uform" | "llava";
+type WardrobeSuggestion = {
+  name: string;
+  category: string;
+  color: string;
+  shade: string;
+  pattern: string;
+  confidence: number;
+  modelUsed: "uform" | "llava" | "";
+};
 
 export type SocialLoginPayload =
   | {
@@ -474,6 +484,21 @@ class ApiClient {
       {
         method: "POST",
         body: JSON.stringify({ purchaseToken, productId }),
+      },
+      true,
+    );
+  }
+
+  async suggestWardrobeDetails(payload: {
+    imageBase64: string;
+    mimeType?: string;
+    model?: WardrobeSuggestModel;
+  }) {
+    return this.request<WardrobeSuggestion>(
+      "/wardrobe/suggest",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
       },
       true,
     );

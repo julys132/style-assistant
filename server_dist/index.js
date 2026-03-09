@@ -537,6 +537,55 @@ var MAX_IMAGE_COUNT_BY_MODE = {
 };
 var MAX_IMAGE_BASE64_LENGTH = 25e5;
 var STRIPE_WEBHOOK_TOLERANCE_SEC = 300;
+var WARDROBE_SUGGEST_TIMEOUT_MS = 25e3;
+var DEFAULT_WARDROBE_SUGGEST_WORKER_URL = "https://wardrobe-suggest-worker.iuliastarcean.workers.dev/suggest-wardrobe";
+var WARDROBE_SUGGEST_MODELS = ["auto", "uform", "llava"];
+var WARDROBE_CATEGORIES = ["Top", "Bottom", "Dress", "Outerwear", "Shoes", "Accessory", "Bag"];
+var WARDROBE_COLORS = [
+  "Black",
+  "White",
+  "Navy",
+  "Gray",
+  "Beige",
+  "Brown",
+  "Red",
+  "Blue",
+  "Green",
+  "Pink",
+  "Gold",
+  "Silver",
+  "Yellow",
+  "Orange",
+  "Purple",
+  "Multi"
+];
+var WARDROBE_PATTERNS = ["Solid", "Striped", "Floral", "Checked", "Graphic", "Other"];
+var SHADE_TO_BASE_COLOR = {
+  charcoal: "Gray",
+  heather: "Gray",
+  "dark heather": "Gray",
+  "light heather": "Gray",
+  "ash gray": "Gray",
+  "ash grey": "Gray",
+  oatmeal: "Beige",
+  taupe: "Beige",
+  stone: "Beige",
+  sand: "Beige",
+  khaki: "Beige",
+  cream: "White",
+  ivory: "White",
+  offwhite: "White",
+  "off white": "White",
+  navy: "Navy",
+  cobalt: "Blue",
+  burgundy: "Red",
+  maroon: "Red",
+  sage: "Green",
+  olive: "Green",
+  lilac: "Purple",
+  lavender: "Purple",
+  mustard: "Yellow"
+};
 var DEFAULT_IAP_PRODUCT_CREDITS = {
   "com.iulia.muse.credits.5": 5,
   "com.iulia.muse.credits.15": 15,
@@ -637,6 +686,130 @@ function normalizeStringValue(input) {
 function normalizeStringList(input) {
   if (!Array.isArray(input)) return [];
   return input.filter((value) => typeof value === "string").map((value) => value.trim()).filter(Boolean);
+}
+function normalizeWardrobeSuggestModel(input) {
+  const model = normalizeStringValue(input).toLowerCase();
+  if (WARDROBE_SUGGEST_MODELS.includes(model)) {
+    return model;
+  }
+  return "auto";
+}
+function getWardrobeSuggestWorkerUrl() {
+  const configuredUrl = normalizeStringValue(process.env.WARDROBE_SUGGEST_WORKER_URL);
+  const source = configuredUrl || DEFAULT_WARDROBE_SUGGEST_WORKER_URL;
+  const trimmed = source.replace(/\/+$/, "");
+  if (trimmed.endsWith("/suggest-wardrobe")) return trimmed;
+  return `${trimmed}/suggest-wardrobe`;
+}
+function normalizeWardrobeEnumValue(input, allowedValues, aliases = {}) {
+  const normalized = normalizeStringValue(input).toLowerCase();
+  if (!normalized) return "";
+  if (aliases[normalized]) return aliases[normalized];
+  const directMatch = allowedValues.find((value) => value.toLowerCase() === normalized);
+  if (directMatch) return directMatch;
+  const tokenized = normalized.replace(/[_-]+/g, " ").split(/[\s,/|]+/).map((token) => token.trim()).filter(Boolean);
+  for (const token of tokenized) {
+    if (aliases[token]) return aliases[token];
+    const tokenMatch = allowedValues.find((value) => value.toLowerCase() === token);
+    if (tokenMatch) return tokenMatch;
+  }
+  const partialMatch = allowedValues.find((value) => normalized.includes(value.toLowerCase()));
+  if (partialMatch) return partialMatch;
+  const partialAlias = Object.entries(aliases).find(([alias]) => normalized.includes(alias));
+  if (partialAlias) return partialAlias[1];
+  return "";
+}
+function normalizeWardrobeCategory(input) {
+  return normalizeWardrobeEnumValue(input, WARDROBE_CATEGORIES, {
+    tee: "Top",
+    tshirt: "Top",
+    "t-shirt": "Top",
+    shirt: "Top",
+    blouse: "Top",
+    tank: "Top",
+    sweater: "Top",
+    hoodie: "Top",
+    trouser: "Bottom",
+    trousers: "Bottom",
+    pants: "Bottom",
+    jeans: "Bottom",
+    skirt: "Bottom",
+    shorts: "Bottom",
+    leggings: "Bottom",
+    gown: "Dress",
+    jacket: "Outerwear",
+    coat: "Outerwear",
+    blazer: "Outerwear",
+    sneaker: "Shoes",
+    sneakers: "Shoes",
+    sandal: "Shoes",
+    sandals: "Shoes",
+    boot: "Shoes",
+    boots: "Shoes",
+    handbag: "Bag",
+    purse: "Bag",
+    tote: "Bag",
+    backpack: "Bag",
+    belt: "Accessory",
+    hat: "Accessory",
+    scarf: "Accessory",
+    jewelry: "Accessory",
+    jewellery: "Accessory"
+  });
+}
+function normalizeWardrobeColor(input) {
+  return normalizeWardrobeEnumValue(input, WARDROBE_COLORS, {
+    grey: "Gray",
+    gray: "Gray",
+    charcoal: "Gray",
+    heather: "Gray",
+    "dark heather": "Gray",
+    ivory: "White",
+    cream: "White",
+    tan: "Beige",
+    camel: "Beige",
+    burgundy: "Red",
+    maroon: "Red",
+    olive: "Green",
+    multicolor: "Multi",
+    multicolour: "Multi",
+    colorful: "Multi",
+    colourful: "Multi"
+  });
+}
+function normalizeWardrobePattern(input) {
+  return normalizeWardrobeEnumValue(input, WARDROBE_PATTERNS, {
+    plain: "Solid",
+    stripe: "Striped",
+    stripes: "Striped",
+    checkered: "Checked",
+    plaid: "Checked",
+    print: "Graphic",
+    printed: "Graphic",
+    logo: "Graphic"
+  });
+}
+function normalizeWardrobeShade(input) {
+  const normalized = normalizeStringValue(input).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  if (normalized.includes("|")) return "";
+  return normalized.split(" ").map((token) => token.charAt(0).toUpperCase() + token.slice(1).toLowerCase()).slice(0, 3).join(" ");
+}
+function inferWardrobeColorFromShade(shade) {
+  const normalized = shade.trim().toLowerCase();
+  if (!normalized) return "";
+  if (SHADE_TO_BASE_COLOR[normalized]) return SHADE_TO_BASE_COLOR[normalized];
+  const partial = Object.entries(SHADE_TO_BASE_COLOR).find(([key]) => normalized.includes(key));
+  return partial ? partial[1] : "";
+}
+function normalizeWardrobeConfidence(input) {
+  const confidence = Number(input);
+  if (!Number.isFinite(confidence)) return 0;
+  return Math.min(Math.max(confidence, 0), 1);
+}
+function buildWardrobeFallbackName(category, color) {
+  const categoryLabel = category === "Top" ? "top" : category === "Bottom" ? "bottom" : category === "Outerwear" ? "outerwear" : category ? category.toLowerCase() : "item";
+  return [color ? color.toLowerCase() : "", categoryLabel].filter(Boolean).join(" ").trim();
 }
 function isDevCreditGrantEnabled() {
   const override = normalizeStringValue(process.env.ENABLE_DEV_CREDIT_GRANTS).toLowerCase();
@@ -1559,6 +1732,74 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Update profile error:", error);
       res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+  app2.post("/api/wardrobe/suggest", authMiddleware, async (req, res) => {
+    try {
+      const imageBase64 = normalizeStringValue(req.body?.imageBase64);
+      if (!imageBase64) {
+        return res.status(400).json({ error: "imageBase64 is required" });
+      }
+      const requestedModel = normalizeWardrobeSuggestModel(req.body?.model);
+      const rawMimeType = normalizeStringValue(req.body?.mimeType).toLowerCase();
+      const mimeType = rawMimeType.startsWith("image/") ? rawMimeType : "image/jpeg";
+      const workerUrl = getWardrobeSuggestWorkerUrl();
+      const timeoutController = new AbortController();
+      const timeoutHandle = setTimeout(() => timeoutController.abort(), WARDROBE_SUGGEST_TIMEOUT_MS);
+      let workerResponse;
+      try {
+        workerResponse = await fetch(workerUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            imageBase64,
+            mimeType,
+            model: requestedModel
+          }),
+          signal: timeoutController.signal
+        });
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
+      const workerText = await workerResponse.text();
+      let workerPayload = {};
+      try {
+        workerPayload = workerText ? JSON.parse(workerText) : {};
+      } catch {
+        workerPayload = {};
+      }
+      if (!workerResponse.ok) {
+        const workerErrorMessage = normalizeStringValue(workerPayload?.error) || normalizeStringValue(workerPayload?.details) || workerText || "Wardrobe suggestion worker returned an error.";
+        return res.status(502).json({ error: workerErrorMessage });
+      }
+      const normalizedName = normalizeStringValue(workerPayload.name).slice(0, 80);
+      const normalizedCategory = normalizeWardrobeCategory(workerPayload.category || normalizedName);
+      const normalizedShade = normalizeWardrobeShade(workerPayload.shade);
+      const inferredColorFromShade = inferWardrobeColorFromShade(normalizedShade);
+      const normalizedColor = normalizeWardrobeColor(
+        workerPayload.color || inferredColorFromShade || normalizedName
+      );
+      const normalizedPattern = normalizeWardrobePattern(workerPayload.pattern || normalizedName);
+      const normalizedConfidence = normalizeWardrobeConfidence(workerPayload.confidence);
+      const modelUsed = normalizeWardrobeSuggestModel(workerPayload.modelUsed);
+      const workerRaisedError = normalizeStringValue(workerPayload.error || workerPayload.details);
+      if (!normalizedName && !normalizedCategory && !normalizedColor && workerRaisedError) {
+        return res.status(502).json({ error: workerRaisedError });
+      }
+      return res.json({
+        name: normalizedName || buildWardrobeFallbackName(normalizedCategory, normalizedColor),
+        category: normalizedCategory,
+        color: normalizedColor,
+        shade: normalizedShade,
+        pattern: normalizedPattern,
+        confidence: normalizedConfidence,
+        modelUsed: modelUsed === "auto" ? "" : modelUsed
+      });
+    } catch (error) {
+      console.error("Wardrobe suggest error:", error);
+      return res.status(500).json({ error: toErrorMessage(error, "Failed to suggest wardrobe details") });
     }
   });
   app2.post("/api/stripe/webhook", async (req, res) => {

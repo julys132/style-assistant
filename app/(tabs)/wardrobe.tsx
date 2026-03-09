@@ -19,9 +19,34 @@ import * as Haptics from "expo-haptics";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useWardrobe, ClothingItem } from "@/contexts/WardrobeContext";
+import { apiClient } from "@/lib/api-client";
 
 const CATEGORIES = ["Top", "Bottom", "Dress", "Outerwear", "Shoes", "Accessory", "Bag"];
-const COLORS_LIST = ["Black", "White", "Navy", "Gray", "Beige", "Brown", "Red", "Blue", "Green", "Pink", "Gold", "Silver"];
+const COLORS_LIST = [
+  "Black",
+  "White",
+  "Navy",
+  "Gray",
+  "Beige",
+  "Brown",
+  "Red",
+  "Blue",
+  "Green",
+  "Pink",
+  "Gold",
+  "Silver",
+  "Yellow",
+  "Orange",
+  "Purple",
+  "Multi",
+];
+const PATTERN_LIST = ["Solid", "Striped", "Floral", "Checked", "Graphic", "Other"];
+const SUGGEST_MODELS = [
+  { id: "auto", label: "Auto" },
+  { id: "uform", label: "Uform" },
+  { id: "llava", label: "LLaVA" },
+] as const;
+type SuggestModel = (typeof SUGGEST_MODELS)[number]["id"];
 
 function EmptyWardrobe() {
   return (
@@ -47,7 +72,9 @@ function ClothingCard({ item, onDelete }: { item: ClothingItem; onDelete: (id: s
       )}
       <View style={styles.clothingInfo}>
         <Text style={styles.clothingName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.clothingMeta}>{item.category} / {item.color}</Text>
+        <Text style={styles.clothingMeta}>
+          {item.category} / {item.color}{item.shade ? ` (${item.shade})` : ""}{item.pattern ? ` / ${item.pattern}` : ""}
+        </Text>
       </View>
       <Pressable
         onPress={() => {
@@ -69,9 +96,17 @@ export default function WardrobeScreen() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [color, setColor] = useState("");
+  const [shade, setShade] = useState("");
+  const [pattern, setPattern] = useState("");
   const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  const [imageBase64, setImageBase64] = useState("");
+  const [imageMimeType, setImageMimeType] = useState("image/jpeg");
+  const [suggestModel, setSuggestModel] = useState<SuggestModel>("auto");
+  const [suggestedShade, setSuggestedShade] = useState("");
+  const [modelUsedLabel, setModelUsedLabel] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -86,10 +121,59 @@ export default function WardrobeScreen() {
     const selectedAsset = !result.canceled && result.assets[0] ? result.assets[0] : null;
     if (selectedAsset?.uri) {
       setImageUri(selectedAsset.uri);
+      setImageBase64(selectedAsset.base64 || "");
+      setImageMimeType(selectedAsset.mimeType || "image/jpeg");
+      setSuggestedShade("");
+      setModelUsedLabel("");
     } else if (!result.canceled) {
       Alert.alert("Image error", "Could not read the selected image. Please try again.");
     }
   }, []);
+
+  const handleSuggestDetails = useCallback(async () => {
+    if (!imageBase64) {
+      Alert.alert("Image required", "Please choose a photo first.");
+      return;
+    }
+
+    setSuggesting(true);
+    try {
+      const suggestion = await apiClient.suggestWardrobeDetails({
+        imageBase64,
+        mimeType: imageMimeType,
+        model: suggestModel,
+      });
+
+      if (suggestion.name) setName(suggestion.name);
+      if (suggestion.category && CATEGORIES.includes(suggestion.category)) {
+        setCategory(suggestion.category);
+      }
+      if (suggestion.color && COLORS_LIST.includes(suggestion.color)) {
+        setColor(suggestion.color);
+      }
+      if (suggestion.pattern && PATTERN_LIST.includes(suggestion.pattern)) {
+        setPattern(suggestion.pattern);
+      }
+      if (suggestion.shade) {
+        setSuggestedShade(suggestion.shade);
+      } else {
+        setSuggestedShade("");
+      }
+      if (suggestion.modelUsed) {
+        setModelUsedLabel(suggestion.modelUsed.toUpperCase());
+      } else {
+        setModelUsedLabel("");
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not suggest details for this photo.";
+      Alert.alert("Suggest failed", message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSuggesting(false);
+    }
+  }, [imageBase64, imageMimeType, suggestModel]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -106,7 +190,15 @@ export default function WardrobeScreen() {
     }
     setSaving(true);
     try {
-      await addItem({ name: name.trim(), category, color, imageUri, description: description.trim() });
+      await addItem({
+        name: name.trim(),
+        category,
+        color,
+        shade: shade.trim() || undefined,
+        pattern,
+        imageUri,
+        description: description.trim(),
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       resetForm();
       setShowModal(false);
@@ -115,14 +207,22 @@ export default function WardrobeScreen() {
     } finally {
       setSaving(false);
     }
-  }, [name, category, color, imageUri, description, addItem]);
+  }, [name, category, color, shade, pattern, imageUri, description, addItem]);
 
   const resetForm = () => {
     setName("");
     setCategory("");
     setColor("");
+    setShade("");
+    setPattern("");
     setImageUri(undefined);
+    setImageBase64("");
+    setImageMimeType("image/jpeg");
+    setSuggestedShade("");
+    setModelUsedLabel("");
+    setSuggestModel("auto");
     setDescription("");
+    setSuggesting(false);
   };
 
   const performDelete = useCallback(async (id: string) => {
@@ -207,6 +307,73 @@ export default function WardrobeScreen() {
                       </View>
                     )}
                   </Pressable>
+                  {imageUri ? (
+                    <View style={styles.suggestBlock}>
+                      <Text style={styles.inputLabel}>AI Model</Text>
+                      <View style={styles.suggestModelRow}>
+                        {SUGGEST_MODELS.map((option) => (
+                          <Pressable
+                            key={option.id}
+                            onPress={() => {
+                              setSuggestModel(option.id);
+                              Haptics.selectionAsync();
+                            }}
+                            style={[styles.suggestModelChip, suggestModel === option.id && styles.suggestModelChipActive]}
+                          >
+                            <Text
+                              style={[
+                                styles.suggestModelChipText,
+                                suggestModel === option.id && styles.suggestModelChipTextActive,
+                              ]}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <Text style={styles.suggestHintText}>
+                        {suggestModel === "uform"
+                          ? "Uform primary, LLaVA backup."
+                          : suggestModel === "llava"
+                            ? "LLaVA primary, Uform backup."
+                            : "Auto: Uform primary, LLaVA backup."}
+                      </Text>
+
+                      <Pressable
+                        onPress={handleSuggestDetails}
+                        disabled={suggesting}
+                        style={({ pressed }) => [
+                          styles.suggestButton,
+                          pressed && { opacity: 0.85 },
+                          suggesting && { opacity: 0.7 },
+                        ]}
+                      >
+                        {suggesting ? (
+                          <ActivityIndicator color={Colors.black} />
+                        ) : (
+                          <Text style={styles.suggestButtonText}>Suggest details</Text>
+                        )}
+                      </Pressable>
+
+                      {modelUsedLabel ? (
+                        <Text style={styles.suggestHintText}>Suggested by: {modelUsedLabel}</Text>
+                      ) : null}
+                      {suggestedShade ? (
+                        <View style={styles.suggestedShadeRow}>
+                          <Text style={styles.suggestedShadeText}>Suggested shade: {suggestedShade}</Text>
+                          <Pressable
+                            onPress={() => {
+                              setShade(suggestedShade);
+                              Haptics.selectionAsync();
+                            }}
+                            style={styles.applyShadeButton}
+                          >
+                            <Text style={styles.applyShadeButtonText}>Use</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
 
                   <View style={styles.inputWrapper}>
                     <Text style={styles.inputLabel}>Name</Text>
@@ -244,6 +411,32 @@ export default function WardrobeScreen() {
                           style={[styles.chip, color === c && styles.chipActive]}
                         >
                           <Text style={[styles.chipText, color === c && styles.chipTextActive]}>{c}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Text style={styles.inputLabel}>Shade (optional)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={shade}
+                      onChangeText={setShade}
+                      placeholder="e.g., Dark Heather, Charcoal, Oatmeal"
+                      placeholderTextColor={Colors.textMuted}
+                    />
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Text style={styles.inputLabel}>Pattern (optional)</Text>
+                    <View style={styles.chipRow}>
+                      {PATTERN_LIST.map((p) => (
+                        <Pressable
+                          key={p}
+                          onPress={() => { setPattern(p); Haptics.selectionAsync(); }}
+                          style={[styles.chip, pattern === p && styles.chipActive]}
+                        >
+                          <Text style={[styles.chipText, pattern === p && styles.chipTextActive]}>{p}</Text>
                         </Pressable>
                       ))}
                     </View>
@@ -420,6 +613,74 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   pickedImage: { width: "100%", height: 200, borderRadius: 16 },
+  suggestBlock: { gap: 8 },
+  suggestModelRow: { flexDirection: "row", gap: 8 },
+  suggestModelChip: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    backgroundColor: Colors.surfaceLight,
+    height: 38,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  suggestModelChipActive: {
+    borderColor: Colors.accent,
+    backgroundColor: "rgba(201, 169, 110, 0.16)",
+  },
+  suggestModelChipText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  suggestModelChipTextActive: {
+    color: Colors.accent,
+  },
+  suggestHintText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  suggestButton: {
+    backgroundColor: Colors.accent,
+    borderRadius: 12,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  suggestButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    color: Colors.black,
+  },
+  suggestedShadeRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  suggestedShadeText: {
+    flex: 1,
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    color: Colors.white,
+  },
+  applyShadeButton: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(201, 169, 110, 0.12)",
+  },
+  applyShadeButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: Colors.accent,
+  },
   inputWrapper: { gap: 8 },
   inputLabel: {
     fontFamily: "Inter_500Medium",

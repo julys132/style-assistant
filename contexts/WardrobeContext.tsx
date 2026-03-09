@@ -8,6 +8,8 @@ export interface ClothingItem {
   name: string;
   category: string;
   color: string;
+  shade?: string;
+  pattern?: string;
   imageUri?: string;
   description?: string;
   createdAt: number;
