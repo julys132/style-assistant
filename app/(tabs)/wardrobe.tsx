@@ -59,6 +59,22 @@ const GRID_SIZE_OPTIONS: { id: WardrobeGridSize; label: string }[] = [
   { id: "large", label: "Large" },
 ];
 
+function resolveRenderableImageUri(imageUri?: string): string | null {
+  const normalized = typeof imageUri === "string" ? imageUri.trim() : "";
+  if (!normalized) return null;
+
+  if (Platform.OS === "web" && normalized.startsWith("blob:")) {
+    // Blob URLs are session-only on web and can break after reload.
+    return null;
+  }
+
+  if (normalized.startsWith("data:image/")) return normalized;
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(normalized)) return normalized;
+  if (normalized.startsWith("/")) return normalized;
+
+  return null;
+}
+
 function EmptyWardrobe() {
   return (
     <View style={styles.emptyContainer}>
@@ -80,10 +96,12 @@ function ClothingCard({
   onDelete: (id: string) => void;
   cardWidth: number;
 }) {
+  const displayImageUri = resolveRenderableImageUri(item.imageUri);
+
   return (
     <Animated.View entering={FadeInDown.duration(400)} style={[styles.clothingCard, { width: cardWidth }]}>
-      {item.imageUri ? (
-        <Image source={{ uri: item.imageUri }} style={styles.clothingImage} contentFit="cover" />
+      {displayImageUri ? (
+        <Image source={{ uri: displayImageUri }} style={styles.clothingImage} contentFit="cover" />
       ) : (
         <View style={styles.clothingImagePlaceholder}>
           <MaterialCommunityIcons name="hanger" size={32} color={Colors.textMuted} />
@@ -232,13 +250,18 @@ export default function WardrobeScreen() {
     }
     setSaving(true);
     try {
+      const persistedImageUri =
+        Platform.OS === "web" && imageBase64
+          ? `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}`
+          : imageUri;
+
       await addItem({
         name: name.trim(),
         category,
         color,
         shade: shade.trim() || undefined,
         pattern,
-        imageUri,
+        imageUri: persistedImageUri,
         description: description.trim(),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -249,7 +272,7 @@ export default function WardrobeScreen() {
     } finally {
       setSaving(false);
     }
-  }, [name, category, color, shade, pattern, imageUri, description, addItem]);
+  }, [name, category, color, shade, pattern, imageUri, imageBase64, imageMimeType, description, addItem]);
 
   const resetForm = () => {
     setName("");

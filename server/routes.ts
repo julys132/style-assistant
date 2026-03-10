@@ -376,7 +376,7 @@ const MAX_IMAGE_BASE64_LENGTH = 2_500_000;
 const STRIPE_WEBHOOK_TOLERANCE_SEC = 300;
 const WARDROBE_SUGGEST_TIMEOUT_MS = 25_000;
 const DEFAULT_WARDROBE_SUGGEST_WORKER_URL =
-  "https://wardrobe-suggest-worker.iuliastarcean.workers.dev/suggest-wardrobe";
+  "https://muse.iuliastarcean.workers.dev/suggest-wardrobe";
 const WARDROBE_SUGGEST_MODELS = ["auto", "uform", "llava"] as const;
 const WARDROBE_CATEGORIES = ["Top", "Bottom", "Dress", "Outerwear", "Shoes", "Accessory", "Bag"] as const;
 const WARDROBE_COLORS = [
@@ -2046,7 +2046,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: unknown) {
       console.error("Wardrobe suggest error:", error);
-      return res.status(500).json({ error: toErrorMessage(error, "Failed to suggest wardrobe details") });
+      const message = toErrorMessage(error, "Failed to suggest wardrobe details");
+      const normalizedMessage = message.toLowerCase();
+      const isWorkerConnectivityError =
+        normalizedMessage.includes("fetch failed") ||
+        normalizedMessage.includes("network") ||
+        normalizedMessage.includes("timed out") ||
+        normalizedMessage.includes("aborted");
+
+      if (isWorkerConnectivityError) {
+        return res.status(502).json({
+          error: "Wardrobe suggestion service is unavailable. Check WARDROBE_SUGGEST_WORKER_URL.",
+        });
+      }
+
+      return res.status(500).json({ error: message });
     }
   });
 
