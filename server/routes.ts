@@ -376,7 +376,7 @@ const MAX_IMAGE_BASE64_LENGTH = 2_500_000;
 const STRIPE_WEBHOOK_TOLERANCE_SEC = 300;
 const WARDROBE_SUGGEST_TIMEOUT_MS = 25_000;
 const DEFAULT_WARDROBE_SUGGEST_WORKER_URL =
-  "https://muse.iuliastarcean.workers.dev/suggest-wardrobe";
+  "https://wardrobe-suggest-worker.iuliastarcean.workers.dev/suggest-wardrobe";
 const WARDROBE_SUGGEST_MODELS = ["auto", "uform", "llava"] as const;
 const WARDROBE_CATEGORIES = ["Top", "Bottom", "Dress", "Outerwear", "Shoes", "Accessory", "Bag"] as const;
 const WARDROBE_COLORS = [
