@@ -2022,6 +2022,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         workerPayload = {};
       }
 
+      if (Object.keys(workerPayload).length === 0 && workerText.trim().length > 0) {
+        const rawTextLower = workerText.toLowerCase();
+        if (rawTextLower.includes("hello world")) {
+          return res.status(502).json({
+            error:
+              "Wardrobe worker is still running Hello World template. Deploy wardrobe-suggest-worker code to the active worker.",
+          });
+        }
+      }
+
       if (!workerResponse.ok) {
         const workerErrorMessage =
           normalizeStringValue(workerPayload?.error) ||
@@ -2050,6 +2060,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workerRaisedError = normalizeStringValue(workerPayload.error || workerPayload.details);
       if (!normalizedName && !normalizedCategory && !normalizedColor && workerRaisedError) {
         return res.status(502).json({ error: workerRaisedError });
+      }
+
+      if (!normalizedName && !normalizedCategory && !normalizedColor && !normalizedPattern) {
+        return res.status(502).json({
+          error: "Wardrobe worker returned an unstructured response. Check worker deployment and model output.",
+        });
       }
 
       return res.json({

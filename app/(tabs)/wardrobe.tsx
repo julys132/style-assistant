@@ -82,27 +82,58 @@ function resolveRenderableImageUri(imageUri?: string): string | null {
 
 async function readWebImageAsBase64(uri: string): Promise<string> {
   if (Platform.OS !== "web") return "";
+  if (typeof window === "undefined" || typeof document === "undefined") return "";
 
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error("Could not load selected image");
+  try {
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error("Could not load selected image");
+    }
+    const blob = await response.blob();
+
+    const dataUri = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result !== "string") {
+          reject(new Error("Could not read selected image"));
+          return;
+        }
+        resolve(reader.result);
+      };
+      reader.onerror = () => reject(new Error("Could not read selected image"));
+      reader.readAsDataURL(blob);
+    });
+
+    return stripDataUriPrefix(dataUri);
+  } catch {
+    // Fallback for browser/blob edge-cases: redraw through canvas.
+    const dataUri = await new Promise<string>((resolve, reject) => {
+      const image = new window.Image();
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        const width = image.naturalWidth || image.width;
+        const height = image.naturalHeight || image.height;
+        if (!width || !height) {
+          reject(new Error("Could not decode selected image"));
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Canvas context unavailable"));
+          return;
+        }
+        context.drawImage(image, 0, 0, width, height);
+        const encodedDataUri = canvas.toDataURL("image/jpeg", 0.82);
+        resolve(encodedDataUri);
+      };
+      image.onerror = () => reject(new Error("Could not decode selected image"));
+      image.src = uri;
+    });
+    return stripDataUriPrefix(dataUri);
   }
-  const blob = await response.blob();
-
-  const dataUri = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result !== "string") {
-        reject(new Error("Could not read selected image"));
-        return;
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = () => reject(new Error("Could not read selected image"));
-    reader.readAsDataURL(blob);
-  });
-
-  return stripDataUriPrefix(dataUri);
 }
 
 function normalizeOptionFromList(
@@ -383,6 +414,15 @@ export default function WardrobeScreen() {
         } catch (error) {
           console.warn("Failed to recover base64 for web wardrobe image:", error);
         }
+      }
+
+      if (Platform.OS === "web" && imageUri && !resolvedBase64) {
+        Alert.alert(
+          "Image processing failed",
+          "Could not process this image for web storage. Please pick the photo again.",
+        );
+        setSaving(false);
+        return;
       }
 
       const persistedImageUri =
