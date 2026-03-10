@@ -1993,34 +1993,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const mimeType = rawMimeType.startsWith("image/") ? rawMimeType : "image/jpeg";
       const workerUrl = getWardrobeSuggestWorkerUrl();
 
-      const timeoutController = new AbortController();
-      const timeoutHandle = setTimeout(() => timeoutController.abort(), WARDROBE_SUGGEST_TIMEOUT_MS);
+      const runWorkerRequest = async (model: WardrobeSuggestModel) => {
+        const timeoutController = new AbortController();
+        const timeoutHandle = setTimeout(() => timeoutController.abort(), WARDROBE_SUGGEST_TIMEOUT_MS);
+        try {
+          const response = await fetch(workerUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              imageBase64,
+              mimeType,
+              model,
+            }),
+            signal: timeoutController.signal,
+          });
+          const text = await response.text();
+          let payload: WardrobeSuggestWorkerPayload = {};
+          try {
+            payload = text ? (JSON.parse(text) as WardrobeSuggestWorkerPayload) : {};
+          } catch {
+            payload = {};
+          }
+          return { response, text, payload, model };
+        } finally {
+          clearTimeout(timeoutHandle);
+        }
+      };
 
-      let workerResponse: Response;
-      try {
-        workerResponse = await fetch(workerUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            imageBase64,
-            mimeType,
-            model: requestedModel,
-          }),
-          signal: timeoutController.signal,
-        });
-      } finally {
-        clearTimeout(timeoutHandle);
+      const payloadHasStructuredFields = (payload: WardrobeSuggestWorkerPayload): boolean =>
+        Boolean(
+          normalizeStringValue(payload.category) ||
+            normalizeStringValue(payload.color) ||
+            normalizeStringValue(payload.name) ||
+            normalizeStringValue(payload.pattern) ||
+            normalizeStringValue(payload.shade),
+        );
+
+      let workerAttempt = await runWorkerRequest(requestedModel);
+
+      if (requestedModel !== "llava") {
+        const needsLlavaFallback =
+          !workerAttempt.response.ok || !payloadHasStructuredFields(workerAttempt.payload);
+        if (needsLlavaFallback) {
+          try {
+            const llavaAttempt = await runWorkerRequest("llava");
+            if (llavaAttempt.response.ok && payloadHasStructuredFields(llavaAttempt.payload)) {
+              workerAttempt = llavaAttempt;
+            }
+          } catch (fallbackError: unknown) {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("Wardrobe suggest llava fallback failed:", fallbackError);
+            }
+          }
+        }
       }
 
-      const workerText = await workerResponse.text();
-      let workerPayload: WardrobeSuggestWorkerPayload = {};
-      try {
-        workerPayload = workerText ? (JSON.parse(workerText) as WardrobeSuggestWorkerPayload) : {};
-      } catch {
-        workerPayload = {};
-      }
+      const workerResponse = workerAttempt.response;
+      const workerText = workerAttempt.text;
+      const workerPayload = workerAttempt.payload;
 
       if (Object.keys(workerPayload).length === 0 && workerText.trim().length > 0) {
         const rawTextLower = workerText.toLowerCase();
