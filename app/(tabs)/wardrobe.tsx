@@ -59,6 +59,11 @@ const GRID_SIZE_OPTIONS: { id: WardrobeGridSize; label: string }[] = [
   { id: "large", label: "Large" },
 ];
 
+function stripDataUriPrefix(base64OrDataUri: string): string {
+  const commaIndex = base64OrDataUri.indexOf(",");
+  return commaIndex >= 0 ? base64OrDataUri.slice(commaIndex + 1) : base64OrDataUri;
+}
+
 function resolveRenderableImageUri(imageUri?: string): string | null {
   const normalized = typeof imageUri === "string" ? imageUri.trim() : "";
   if (!normalized) return null;
@@ -73,6 +78,63 @@ function resolveRenderableImageUri(imageUri?: string): string | null {
   if (normalized.startsWith("/")) return normalized;
 
   return null;
+}
+
+async function readWebImageAsBase64(uri: string): Promise<string> {
+  if (Platform.OS !== "web") return "";
+
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error("Could not load selected image");
+  }
+  const blob = await response.blob();
+
+  const dataUri = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Could not read selected image"));
+        return;
+      }
+      resolve(reader.result);
+    };
+    reader.onerror = () => reject(new Error("Could not read selected image"));
+    reader.readAsDataURL(blob);
+  });
+
+  return stripDataUriPrefix(dataUri);
+}
+
+function normalizeOptionFromList(
+  value: unknown,
+  options: readonly string[],
+  aliases: Record<string, string> = {},
+): string {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!normalized) return "";
+
+  if (aliases[normalized]) return aliases[normalized];
+
+  const direct = options.find((option) => option.toLowerCase() === normalized);
+  if (direct) return direct;
+
+  const compact = normalized.replace(/[_-]+/g, " ");
+  if (aliases[compact]) return aliases[compact];
+
+  const partial = options.find((option) => compact.includes(option.toLowerCase()));
+  return partial || "";
+}
+
+function isGenericSuggestedName(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.length === 0 ||
+    normalized === "item" ||
+    normalized === "clothing item" ||
+    normalized === "fashion item" ||
+    normalized === "garment" ||
+    normalized === "product"
+  );
 }
 
 function EmptyWardrobe() {
@@ -180,8 +242,17 @@ export default function WardrobeScreen() {
     });
     const selectedAsset = !result.canceled && result.assets[0] ? result.assets[0] : null;
     if (selectedAsset?.uri) {
+      let resolvedBase64 = selectedAsset.base64 || "";
+      if (!resolvedBase64 && Platform.OS === "web") {
+        try {
+          resolvedBase64 = await readWebImageAsBase64(selectedAsset.uri);
+        } catch (error) {
+          console.warn("Failed to read web image as base64:", error);
+        }
+      }
+
       setImageUri(selectedAsset.uri);
-      setImageBase64(selectedAsset.base64 || "");
+      setImageBase64(resolvedBase64);
       setImageMimeType(selectedAsset.mimeType || "image/jpeg");
       setSuggestedShade("");
       setModelUsedLabel("");
@@ -203,19 +274,73 @@ export default function WardrobeScreen() {
         mimeType: imageMimeType,
         model: suggestModel,
       });
+      console.log("[wardrobe suggest] raw suggestion:", suggestion);
 
-      if (suggestion.name) setName(suggestion.name);
-      if (suggestion.category && CATEGORIES.includes(suggestion.category)) {
-        setCategory(suggestion.category);
+      const normalizedCategory = normalizeOptionFromList(suggestion.category, CATEGORIES, {
+        tee: "Top",
+        tshirt: "Top",
+        "t-shirt": "Top",
+        shirt: "Top",
+        blouse: "Top",
+        pants: "Bottom",
+        trousers: "Bottom",
+        jeans: "Bottom",
+        jacket: "Outerwear",
+        coat: "Outerwear",
+        blazer: "Outerwear",
+        sneakers: "Shoes",
+        sneaker: "Shoes",
+        sandals: "Shoes",
+        boot: "Shoes",
+        purse: "Bag",
+        handbag: "Bag",
+      });
+      const normalizedColor = normalizeOptionFromList(suggestion.color, COLORS_LIST, {
+        grey: "Gray",
+        gray: "Gray",
+        charcoal: "Gray",
+        heather: "Gray",
+        ivory: "White",
+        cream: "White",
+        tan: "Beige",
+        camel: "Beige",
+        burgundy: "Red",
+        maroon: "Red",
+        olive: "Green",
+        multicolor: "Multi",
+        multicolour: "Multi",
+      });
+      const normalizedPattern = normalizeOptionFromList(suggestion.pattern, PATTERN_LIST, {
+        stripe: "Striped",
+        stripes: "Striped",
+        checkered: "Checked",
+        plaid: "Checked",
+        plain: "Solid",
+        print: "Graphic",
+      });
+
+      const normalizedName =
+        typeof suggestion.name === "string"
+          ? suggestion.name.trim().replace(/\s+/g, " ")
+          : "";
+      if (normalizedName && !isGenericSuggestedName(normalizedName)) {
+        setName(normalizedName);
       }
-      if (suggestion.color && COLORS_LIST.includes(suggestion.color)) {
-        setColor(suggestion.color);
+      if (normalizedCategory) {
+        setCategory(normalizedCategory);
       }
-      if (suggestion.pattern && PATTERN_LIST.includes(suggestion.pattern)) {
-        setPattern(suggestion.pattern);
+      if (normalizedColor) {
+        setColor(normalizedColor);
       }
-      if (suggestion.shade) {
-        setSuggestedShade(suggestion.shade);
+      if (normalizedPattern) {
+        setPattern(normalizedPattern);
+      }
+
+      const normalizedShade =
+        typeof suggestion.shade === "string" ? suggestion.shade.trim().replace(/\s+/g, " ") : "";
+      if (normalizedShade) {
+        setSuggestedShade(normalizedShade);
+        setShade(normalizedShade);
       } else {
         setSuggestedShade("");
       }
@@ -250,9 +375,19 @@ export default function WardrobeScreen() {
     }
     setSaving(true);
     try {
+      let resolvedBase64 = imageBase64;
+      if (Platform.OS === "web" && !resolvedBase64 && imageUri) {
+        try {
+          resolvedBase64 = await readWebImageAsBase64(imageUri);
+          setImageBase64(resolvedBase64);
+        } catch (error) {
+          console.warn("Failed to recover base64 for web wardrobe image:", error);
+        }
+      }
+
       const persistedImageUri =
-        Platform.OS === "web" && imageBase64
-          ? `data:${imageMimeType || "image/jpeg"};base64,${imageBase64}`
+        Platform.OS === "web" && resolvedBase64
+          ? `data:${imageMimeType || "image/jpeg"};base64,${resolvedBase64}`
           : imageUri;
 
       await addItem({

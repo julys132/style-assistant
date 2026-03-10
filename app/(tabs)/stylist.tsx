@@ -100,6 +100,21 @@ function stripDataUriPrefix(base64OrDataUri: string): string {
   return commaIndex >= 0 ? base64OrDataUri.slice(commaIndex + 1) : base64OrDataUri;
 }
 
+function resolveRenderableImageUri(imageUri?: string): string | null {
+  const normalized = typeof imageUri === "string" ? imageUri.trim() : "";
+  if (!normalized) return null;
+
+  if (Platform.OS === "web" && normalized.startsWith("blob:")) {
+    return null;
+  }
+
+  if (normalized.startsWith("data:image/")) return normalized;
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(normalized)) return normalized;
+  if (normalized.startsWith("/")) return normalized;
+
+  return null;
+}
+
 function sanitizeGeneratedImage(
   imageBase64: unknown,
   maxLength: number,
@@ -174,13 +189,15 @@ function SelectableClothingItem({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const displayImageUri = resolveRenderableImageUri(item.imageUri);
+
   return (
     <Pressable
       onPress={() => { onToggle(); Haptics.selectionAsync(); }}
       style={[styles.selectableItem, selected && styles.selectableItemActive]}
     >
-      {item.imageUri ? (
-        <Image source={{ uri: item.imageUri }} style={styles.selectableImage} contentFit="cover" />
+      {displayImageUri ? (
+        <Image source={{ uri: displayImageUri }} style={styles.selectableImage} contentFit="cover" />
       ) : (
         <View style={styles.selectablePlaceholder}>
           <MaterialCommunityIcons name="hanger" size={20} color={Colors.textMuted} />

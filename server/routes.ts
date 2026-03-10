@@ -722,6 +722,18 @@ function buildWardrobeFallbackName(category: string, color: string): string {
   return [color ? color.toLowerCase() : "", categoryLabel].filter(Boolean).join(" ").trim();
 }
 
+function isGenericWardrobeName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return (
+    normalized.length === 0 ||
+    normalized === "item" ||
+    normalized === "clothing item" ||
+    normalized === "fashion item" ||
+    normalized === "garment" ||
+    normalized === "product"
+  );
+}
+
 function isDevCreditGrantEnabled(): boolean {
   const override = normalizeStringValue(process.env.ENABLE_DEV_CREDIT_GRANTS).toLowerCase();
   if (override === "1" || override === "true" || override === "yes") {
@@ -2019,14 +2031,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(502).json({ error: workerErrorMessage });
       }
 
-      const normalizedName = normalizeStringValue(workerPayload.name).slice(0, 80);
-      const normalizedCategory = normalizeWardrobeCategory(workerPayload.category || normalizedName);
+      const rawHintText =
+        normalizeStringValue(workerPayload.raw) || normalizeStringValue(workerPayload.details);
+      const candidateName = normalizeStringValue(workerPayload.name).slice(0, 80);
+      const normalizedName = isGenericWardrobeName(candidateName) ? "" : candidateName;
+      const normalizedCategory = normalizeWardrobeCategory(
+        workerPayload.category || rawHintText || normalizedName,
+      );
       const normalizedShade = normalizeWardrobeShade(workerPayload.shade);
       const inferredColorFromShade = inferWardrobeColorFromShade(normalizedShade);
       const normalizedColor = normalizeWardrobeColor(
-        workerPayload.color || inferredColorFromShade || normalizedName,
+        workerPayload.color || inferredColorFromShade || rawHintText || normalizedName,
       );
-      const normalizedPattern = normalizeWardrobePattern(workerPayload.pattern || normalizedName);
+      const normalizedPattern = normalizeWardrobePattern(workerPayload.pattern || rawHintText || normalizedName);
       const normalizedConfidence = normalizeWardrobeConfidence(workerPayload.confidence);
       const modelUsed = normalizeWardrobeSuggestModel(workerPayload.modelUsed);
 

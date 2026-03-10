@@ -811,6 +811,10 @@ function buildWardrobeFallbackName(category, color) {
   const categoryLabel = category === "Top" ? "top" : category === "Bottom" ? "bottom" : category === "Outerwear" ? "outerwear" : category ? category.toLowerCase() : "item";
   return [color ? color.toLowerCase() : "", categoryLabel].filter(Boolean).join(" ").trim();
 }
+function isGenericWardrobeName(name) {
+  const normalized = name.trim().toLowerCase();
+  return normalized.length === 0 || normalized === "item" || normalized === "clothing item" || normalized === "fashion item" || normalized === "garment" || normalized === "product";
+}
 function isDevCreditGrantEnabled() {
   const override = normalizeStringValue(process.env.ENABLE_DEV_CREDIT_GRANTS).toLowerCase();
   if (override === "1" || override === "true" || override === "yes") {
@@ -1774,14 +1778,18 @@ async function registerRoutes(app2) {
         const workerErrorMessage = normalizeStringValue(workerPayload?.error) || normalizeStringValue(workerPayload?.details) || workerText || "Wardrobe suggestion worker returned an error.";
         return res.status(502).json({ error: workerErrorMessage });
       }
-      const normalizedName = normalizeStringValue(workerPayload.name).slice(0, 80);
-      const normalizedCategory = normalizeWardrobeCategory(workerPayload.category || normalizedName);
+      const rawHintText = normalizeStringValue(workerPayload.raw) || normalizeStringValue(workerPayload.details);
+      const candidateName = normalizeStringValue(workerPayload.name).slice(0, 80);
+      const normalizedName = isGenericWardrobeName(candidateName) ? "" : candidateName;
+      const normalizedCategory = normalizeWardrobeCategory(
+        workerPayload.category || rawHintText || normalizedName
+      );
       const normalizedShade = normalizeWardrobeShade(workerPayload.shade);
       const inferredColorFromShade = inferWardrobeColorFromShade(normalizedShade);
       const normalizedColor = normalizeWardrobeColor(
-        workerPayload.color || inferredColorFromShade || normalizedName
+        workerPayload.color || inferredColorFromShade || rawHintText || normalizedName
       );
-      const normalizedPattern = normalizeWardrobePattern(workerPayload.pattern || normalizedName);
+      const normalizedPattern = normalizeWardrobePattern(workerPayload.pattern || rawHintText || normalizedName);
       const normalizedConfidence = normalizeWardrobeConfidence(workerPayload.confidence);
       const modelUsed = normalizeWardrobeSuggestModel(workerPayload.modelUsed);
       const workerRaisedError = normalizeStringValue(workerPayload.error || workerPayload.details);
