@@ -21,6 +21,10 @@ function RootLayoutNav() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#000" } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="welcome" />
+        <Stack.Screen name="privacy" />
+        <Stack.Screen name="terms" />
+        <Stack.Screen name="contact" />
+        <Stack.Screen name="refund" />
         <Stack.Screen name="(auth)" options={{ presentation: "modal", headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="payment-success" options={{ headerShown: false }} />

@@ -188,6 +188,21 @@ export default function WelcomeScreen() {
               ))}
             </View>
           </View>
+
+          <View style={styles.legalFooter}>
+            <Pressable onPress={() => router.push("/privacy")} style={({ pressed }) => [styles.footerLink, pressed && styles.footerLinkPressed]}>
+              <Text style={styles.footerLinkText}>Privacy Policy</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/terms")} style={({ pressed }) => [styles.footerLink, pressed && styles.footerLinkPressed]}>
+              <Text style={styles.footerLinkText}>Terms</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/contact")} style={({ pressed }) => [styles.footerLink, pressed && styles.footerLinkPressed]}>
+              <Text style={styles.footerLinkText}>Contact</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/refund")} style={({ pressed }) => [styles.footerLink, pressed && styles.footerLinkPressed]}>
+              <Text style={styles.footerLinkText}>Refunds</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -569,5 +584,22 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.68)",
     fontSize: 14,
     lineHeight: 23,
+  },
+  legalFooter: {
+    marginTop: 28,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  footerLink: {
+    paddingVertical: 8,
+  },
+  footerLinkPressed: {
+    opacity: 0.82,
+  },
+  footerLinkText: {
+    color: "#D9C7A5",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

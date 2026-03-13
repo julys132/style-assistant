@@ -467,6 +467,27 @@ export default function CreditsScreen() {
               )}
             </Pressable>
           )}
+          <View style={styles.legalLinksRow}>
+            <Pressable onPress={() => router.push("/terms")} style={({ pressed }) => [styles.legalLink, pressed && { opacity: 0.8 }]}>
+              <Text style={styles.legalLinkText}>Terms</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/privacy")} style={({ pressed }) => [styles.legalLink, pressed && { opacity: 0.8 }]}>
+              <Text style={styles.legalLinkText}>Privacy Policy</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/refund")} style={({ pressed }) => [styles.legalLink, pressed && { opacity: 0.8 }]}>
+              <Text style={styles.legalLinkText}>Refunds</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/contact")} style={({ pressed }) => [styles.legalLink, pressed && { opacity: 0.8 }]}>
+              <Text style={styles.legalLinkText}>Contact</Text>
+            </Pressable>
+          </View>
+          {activeTab === "subscription" ? (
+            <Text style={styles.subscriptionLegalText}>
+              Subscriptions renew according to the billing platform used for purchase unless canceled before the next
+              billing date. Manage and cancel subscriptions through Apple, Google Play, or the original web checkout
+              flow.
+            </Text>
+          ) : null}
         </Animated.View>
       </ScrollView>
     </View>
@@ -767,6 +788,25 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 12,
     color: "#FFD7A0",
+    lineHeight: 18,
+  },
+  legalLinksRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  legalLink: {
+    paddingVertical: 4,
+  },
+  legalLinkText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    color: Colors.accent,
+  },
+  subscriptionLegalText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
     lineHeight: 18,
   },
   restoreButton: {

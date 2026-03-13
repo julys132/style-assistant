@@ -67,6 +67,30 @@ export default function HelpSupportScreen() {
             description="Request account data export or account deletion help."
             onPress={() => openSupportUrl("mailto:privacy@thestylist.app?subject=Privacy%20Request")}
           />
+          <SupportCard
+            icon="document-outline"
+            title="Privacy Policy"
+            description="Read how account, wardrobe, and payment data is handled."
+            onPress={() => router.push("/privacy")}
+          />
+          <SupportCard
+            icon="reader-outline"
+            title="Terms of Service"
+            description="Review the terms that govern purchases and use of the app."
+            onPress={() => router.push("/terms")}
+          />
+          <SupportCard
+            icon="chatbubble-outline"
+            title="Public Contact Page"
+            description="Open the public contact page used for support and billing."
+            onPress={() => router.push("/contact")}
+          />
+          <SupportCard
+            icon="refresh-circle-outline"
+            title="Refunds & Cancellation"
+            description="See cancellation and refund handling by platform."
+            onPress={() => router.push("/refund")}
+          />
         </View>
       </ScrollView>
     </View>
