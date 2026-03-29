@@ -69,6 +69,24 @@ const ORBIT_SLOTS = [
   { top: 198, left: "43%", rotate: "4deg" },
 ] as const;
 
+const ART_STYLE_OPTIONS = [
+  {
+    id: "colored_hand_drawn_sketch",
+    label: "Colored Hand-Drawn Sketch",
+    source: require("../../assets/images/art-styles/colored-hand-drawn-sketch.png"),
+  },
+  {
+    id: "black_and_white_sketch",
+    label: "Black-and-White Sketch",
+    source: require("../../assets/images/art-styles/hand-drawn-sketch-black-white.png"),
+  },
+  {
+    id: "simple_watercolor",
+    label: "Simple Watercolor",
+    source: require("../../assets/images/art-styles/simple-watercolor.png"),
+  },
+] as const;
+
 type OutputMode = "text" | "image";
 type ImageInputMode = "single_item" | "multi_item";
 type StyleGender = "female" | "male" | "non_binary" | "";
@@ -232,6 +250,7 @@ export default function StylistScreen() {
   const [styleGender, setStyleGender] = useState<StyleGender>("");
   const [requiredPiecesText, setRequiredPiecesText] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [selectedArtStyleId, setSelectedArtStyleId] = useState<string>("");
   const [stylingSourceMode, setStylingSourceMode] = useState<StylingSourceMode>("photo_only");
   const [outputMode, setOutputMode] = useState<OutputMode>("text");
   const [imageInputMode, setImageInputMode] = useState<OptionalImageInputMode>(null);
@@ -285,6 +304,7 @@ export default function StylistScreen() {
   const hasLookContext =
     selectedItems.length > 0 ||
     customPrompt.trim().length > 0 ||
+    selectedArtStyleId.length > 0 ||
     eventDetails.trim().length > 0 ||
     uploadedPhotos.length > 0 ||
     requiredPiecesText.trim().length > 0;
@@ -313,6 +333,8 @@ export default function StylistScreen() {
   const resolvedAestheticLabel = resolvedAesthetic;
   const selectedPalette =
     PALETTE_OPTIONS.find((palette) => palette.id === selectedPaletteId) || null;
+  const selectedArtStyle = ART_STYLE_OPTIONS.find((style) => style.id === selectedArtStyleId) || null;
+  const selectedArtStyleLabel = selectedArtStyle?.label || "";
   const selectedStructureLabel =
     COLOR_STRUCTURES.find((structure) => structure.id === colorStructure)?.label || "";
   const resolvedColorPalette =
@@ -561,6 +583,12 @@ export default function StylistScreen() {
       .split(/[,;\n]/)
       .map((value: string) => value.trim())
       .filter(Boolean);
+    const promptWithArtStyle = [
+      customPrompt.trim(),
+      selectedArtStyleLabel ? `Art style direction: ${selectedArtStyleLabel}.` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     if (isPhotoOnlyMode && uploadedPhotos.length === 0) {
       const message = "Upload at least one photo in \"Style from this photo\" mode.";
@@ -623,7 +651,7 @@ export default function StylistScreen() {
         aesthetic: resolvedAesthetic,
         colorPalette: resolvedColorPalette,
         requiredPieces,
-        customPrompt: customPrompt.trim(),
+        customPrompt: promptWithArtStyle,
         outputMode,
         imageInputMode: resolvedImageInputMode,
         photos: isPhotoOnlyMode
@@ -713,6 +741,7 @@ export default function StylistScreen() {
     eventDetails,
     resolvedStyleGender,
     customPrompt,
+    selectedArtStyleLabel,
     outputMode,
     uploadedPhotos,
     refreshCredits,
@@ -793,6 +822,12 @@ export default function StylistScreen() {
         .split(/[,;\n]/)
         .map((value: string) => value.trim())
         .filter(Boolean);
+      const promptWithArtStyle = [
+        customPrompt.trim(),
+        selectedArtStyleLabel ? `Art style direction: ${selectedArtStyleLabel}.` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
       const data = await apiClient.modifyStyle({
         originalDescription: result?.description || "",
         originalTips: result?.tips || [],
@@ -811,7 +846,7 @@ export default function StylistScreen() {
         season: resolvedSeason,
         aesthetic: resolvedAesthetic,
         colorPalette: resolvedColorPalette,
-        customPrompt: customPrompt.trim(),
+        customPrompt: promptWithArtStyle,
         requiredPieces,
         outputMode,
         imageInputMode: resolvedImageInputMode,
@@ -890,6 +925,7 @@ export default function StylistScreen() {
     resolvedAesthetic,
     resolvedColorPalette,
     customPrompt,
+    selectedArtStyleLabel,
     requiredPiecesText,
     occasionOther,
     outputMode,
@@ -938,6 +974,46 @@ export default function StylistScreen() {
             <Ionicons name="sparkles" size={14} color={Colors.accent} />
             <Text style={styles.creditsText}>{credits}</Text>
           </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(60).duration(500)} style={styles.section}>
+          <Text style={styles.sectionTitle}>Art Styles</Text>
+          <Text style={styles.artStylesHint}>
+            Choose a visual direction for this look.
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.artStylesRow}
+          >
+            {ART_STYLE_OPTIONS.map((style) => {
+              const isActive = selectedArtStyleId === style.id;
+              return (
+                <Pressable
+                  key={style.id}
+                  onPress={() => {
+                    setSelectedArtStyleId((current) => (current === style.id ? "" : style.id));
+                    setActionHint("");
+                    Haptics.selectionAsync();
+                  }}
+                  style={[
+                    styles.artStyleCard,
+                    isActive ? styles.artStyleCardActive : undefined,
+                  ]}
+                >
+                  <Image source={style.source} style={styles.artStyleImage} contentFit="cover" />
+                  <LinearGradient
+                    colors={["rgba(10,10,12,0.1)", "rgba(10,10,12,0.92)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.artStyleOverlay}
+                  >
+                    <Text style={styles.artStyleLabel}>{style.label}</Text>
+                  </LinearGradient>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(70).duration(500)} style={styles.section}>
@@ -1486,6 +1562,50 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: 12,
+  },
+  artStylesHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+    color: Colors.textSecondary,
+    marginTop: -4,
+    marginBottom: 10,
+  },
+  artStylesRow: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  artStyleCard: {
+    width: 170,
+    height: 210,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    backgroundColor: "#101010",
+  },
+  artStyleCardActive: {
+    borderColor: Colors.accent,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  artStyleImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  artStyleOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  artStyleLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    color: Colors.white,
+    lineHeight: 17,
   },
   dropdownCard: {
     borderRadius: 14,
