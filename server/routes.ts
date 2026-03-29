@@ -364,8 +364,6 @@ const GEMINI_API_BASE_URL =
   process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
 // Override these defaults with STYLE_TEXT_MODEL / STYLE_IMAGE_MODEL env vars.
 const DEFAULT_STYLE_TEXT_MODEL = process.env.STYLE_TEXT_MODEL || "gemini-3-flash-preview";
-// Current image generation runtime is Gemini. If we switch this path to ChatGPT image generation,
-// the preferred target model is `chatgpt-image-latest-high-fidelity (20251216)`, not older `gpt-image-1` variants.
 const DEFAULT_STYLE_IMAGE_MODEL = process.env.STYLE_IMAGE_MODEL || "gemini-3.1-flash-image-preview";
 const STYLE_IMAGE_SIZE = (process.env.STYLE_IMAGE_SIZE || "512x512").trim() || "512x512";
 const EXPOSE_STYLE_DEBUG_PROMPT =
