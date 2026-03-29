@@ -40,6 +40,24 @@ const WELCOME_CARD_IMAGES = [
   require("../attached_assets/b_UI_mobile_UX_design_1771664004224.png"),
 ] as const;
 
+const ART_STYLE_CARDS = [
+  {
+    title: "Colored Hand-Drawn Sketch",
+    text: "Expressive outlines with richer color and a more illustrated finish.",
+    source: require("../assets/images/art-styles/colored-hand-drawn-sketch.png"),
+  },
+  {
+    title: "Black-and-White Sketch",
+    text: "Clean line work, stronger contrast, and a graphic monochrome mood.",
+    source: require("../assets/images/art-styles/hand-drawn-sketch-black-white.png"),
+  },
+  {
+    title: "Simple Watercolor",
+    text: "Soft edges, lighter blending, and a more painterly, airy texture.",
+    source: require("../assets/images/art-styles/simple-watercolor.png"),
+  },
+] as const;
+
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 980;
@@ -207,6 +225,30 @@ export default function WelcomeScreen() {
                   <Text style={styles.featureTitle}>{feature.title}</Text>
                   <Text style={styles.featureText}>{feature.text}</Text>
                 </BlurView>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.artStylesSection}>
+            <Text style={styles.sectionTitle}>Art Styles</Text>
+            <Text style={styles.sectionSubtitle}>
+              Explore a few visual directions that shape the overall mood of the looks.
+            </Text>
+
+            <View style={[styles.artStylesGrid, isWide && styles.artStylesGridWide]}>
+              {ART_STYLE_CARDS.map((card) => (
+                <View key={card.title} style={styles.artStyleCard}>
+                  <Image source={card.source} style={styles.artStyleImage} contentFit="cover" />
+                  <LinearGradient
+                    colors={["rgba(8,8,10,0.06)", "rgba(8,8,10,0.92)"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.artStyleOverlay}
+                  >
+                    <Text style={styles.artStyleTitle}>{card.title}</Text>
+                    <Text style={styles.artStyleText}>{card.text}</Text>
+                  </LinearGradient>
+                </View>
               ))}
             </View>
           </View>
@@ -627,6 +669,9 @@ const styles = StyleSheet.create({
   featuresSection: {
     marginTop: 36,
   },
+  artStylesSection: {
+    marginTop: 36,
+  },
   sectionTitle: {
     color: "#FAF7F2",
     fontSize: 28,
@@ -644,6 +689,41 @@ const styles = StyleSheet.create({
   },
   featuresGridWide: {
     flexDirection: "row",
+  },
+  artStylesGrid: {
+    gap: 14,
+  },
+  artStylesGridWide: {
+    flexDirection: "row",
+  },
+  artStyleCard: {
+    flex: 1,
+    minHeight: 280,
+    borderRadius: 28,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  artStyleImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  artStyleOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 18,
+    gap: 8,
+  },
+  artStyleTitle: {
+    color: "#FAF7F2",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  artStyleText: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 14,
+    lineHeight: 22,
+    maxWidth: 260,
   },
   featureCard: {
     flex: 1,
