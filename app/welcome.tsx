@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { router } from "expo-router";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,6 +33,12 @@ const FEATURES = [
     text: "Create cleaner color combinations, stronger silhouettes, and more intentional styling choices.",
   },
 ];
+
+const WELCOME_CARD_IMAGES = [
+  require("../attached_assets/b_UI_mobile_UX_design_1771664004224.png"),
+  require("../attached_assets/b_UI_UX_design_of_a_hi_(1)_1771664004225.png"),
+  require("../attached_assets/b_UI_mobile_UX_design_1771664004224.png"),
+] as const;
 
 export default function WelcomeScreen() {
   const { width } = useWindowDimensions();
@@ -117,6 +124,21 @@ export default function WelcomeScreen() {
               <View style={styles.visualWrap}>
                 <GlowOrb style={styles.orbOne} />
                 <GlowOrb style={styles.orbTwo} />
+                <FloatingWelcomeCard
+                  source={WELCOME_CARD_IMAGES[0]}
+                  label="Wardrobe flow"
+                  style={styles.floatCardOne}
+                />
+                <FloatingWelcomeCard
+                  source={WELCOME_CARD_IMAGES[1]}
+                  label="Editorial preview"
+                  style={styles.floatCardTwo}
+                />
+                <FloatingWelcomeCard
+                  source={WELCOME_CARD_IMAGES[2]}
+                  label="Look builder"
+                  style={styles.floatCardThree}
+                />
 
                 <BlurView
                   intensity={Platform.OS === "web" ? 60 : 40}
@@ -250,6 +272,25 @@ function MiniCard({
 
 function GlowOrb({ style }: { style?: any }) {
   return <View style={[styles.orb, style]} />;
+}
+
+function FloatingWelcomeCard({
+  source,
+  label,
+  style,
+}: {
+  source: number;
+  label: string;
+  style?: any;
+}) {
+  return (
+    <View style={[styles.floatCard, style]}>
+      <Image source={source} style={styles.floatCardImage} contentFit="cover" />
+      <View style={styles.floatCardCaption}>
+        <Text style={styles.floatCardCaptionText}>{label}</Text>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -406,6 +447,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
+    paddingVertical: 32,
   },
   orb: {
     position: "absolute",
@@ -425,13 +467,14 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     width: "100%",
-    maxWidth: 500,
+    maxWidth: 520,
     borderRadius: 30,
-    padding: 22,
+    padding: 24,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     backgroundColor: "rgba(255,255,255,0.06)",
+    zIndex: 2,
   },
   cardOverline: {
     color: "#B8A7C9",
@@ -507,6 +550,52 @@ const styles = StyleSheet.create({
   },
   miniCardsRow: {
     gap: 12,
+  },
+  floatCard: {
+    position: "absolute",
+    width: 164,
+    borderRadius: 24,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    zIndex: 3,
+  },
+  floatCardOne: {
+    top: 10,
+    left: 8,
+    transform: [{ rotate: "-10deg" }],
+  },
+  floatCardTwo: {
+    top: -4,
+    right: 12,
+    width: 176,
+    transform: [{ rotate: "9deg" }],
+  },
+  floatCardThree: {
+    bottom: -4,
+    right: 42,
+    transform: [{ rotate: "-7deg" }],
+  },
+  floatCardImage: {
+    width: "100%",
+    aspectRatio: 1,
+  },
+  floatCardCaption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "rgba(12,12,15,0.92)",
+  },
+  floatCardCaptionText: {
+    color: "#F3E6D0",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   miniCard: {
     flexDirection: "row",

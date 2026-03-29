@@ -188,6 +188,13 @@ export default function ProfileScreen() {
           <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => router.push("/(tabs)/help-support" as any)} />
         </Animated.View>
 
+        <Animated.View entering={FadeInDown.delay(350).duration(500)} style={styles.menuSection}>
+          <MenuItem icon="document-text-outline" label="Privacy Policy" onPress={() => router.push("/privacy")} />
+          <MenuItem icon="reader-outline" label="Terms of Service" onPress={() => router.push("/terms")} />
+          <MenuItem icon="mail-outline" label="Contact" onPress={() => router.push("/contact")} />
+          <MenuItem icon="refresh-circle-outline" label="Refunds & Cancellation" onPress={() => router.push("/refund")} />
+        </Animated.View>
+
         <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.dangerSection}>
           <Pressable
             onPress={handleLogout}
